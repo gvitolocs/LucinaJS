@@ -1,36 +1,26 @@
 #!/bin/bash
-# Merge gate "permanent-space census" (.lucina/pipeline.toml). Runs from the repo root on the merge
-# candidate, debug only (the census walks the permanent space through the verifier's item walk, which
-# is built for debug assertions — the same reason gate-gc-verify.sh refuses --release).
+# Gate "permanent-space census". Runs from the repository root, debug only (the census walks the permanent space through the
+# verifier's item walk, which is built for debug assertions, the same reason gate-gc-verify.sh refuses --release).
 #
-# What it asserts: the GC proof relies on a premise about the *whole heap* — no list-kind item (WeakRef,
-# WeakMap/WeakSet, FinalizationRegistry, prototype children vec, inline cache) ever sits in the permanent
-# space, because nothing moves a permanent item and so no collection ever repairs its weak slots. A diff
-# cannot be shown to touch that premise, so the gate's `paths` is empty: it runs on every merge.
+# What it asserts: the GC proof relies on a premise about the whole heap: no list-kind item (WeakRef, WeakMap/WeakSet,
+# FinalizationRegistry, prototype children vec, inline cache) ever sits in the permanent space, because nothing moves a permanent
+# item and so no collection ever repairs its weak slots. A diff cannot be shown to touch that premise, so this gate runs on every
+# change.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-BQ="$HOME/.local/bin/bq"
-# Every cargo step here is a queued job: the gate can land while the proof and long-suite jobs hold
-# the machine. The queue wait counts against timeout_min, so it is bounded by --max-wait.
-# CARGO_TARGET_DIR is the caller's when set (agentd does not set it; the shared gate target is then
-# used), otherwise the default below.
-: "${CARGO_TARGET_DIR:=$HOME/scratch/brim-gate-target}"
-
-# The census test in src/js/runtime/embed/tests.rs (package brimstone_core). Matched as a substring so
-# neither the gc_verify_ prefix nor the module path is hardcoded here: step (a) resolves the full path
-# from --list, step (b) runs exactly that path with --exact.
+# The census test in src/js/runtime/embed/tests.rs (package brimstone_core). Matched as a substring so neither the gc_verify_
+# prefix nor the module path is hardcoded here: step (a) resolves the full path from --list, step (b) runs exactly that path.
 CENSUS_SUBSTRING="the_permanent_space_holds_no_item_whose_weak_slots_only_a_list_repairs"
 
-# step_capture: gate-gc-verify.sh's step(), except that both steps here have to read the output — one
-# for the test name, one for the count. The whole output is printed either way, so a compile error or a
-# failing assertion is visible in the gate log.
+# step_capture: both steps read the output (one for the test name, one for the count). The whole output is printed either way, so a
+# compile error or a failing assertion is visible in the log.
 CAPTURED=""
 step_capture() {
   local label="$1"
   shift
   echo "gate-census: $label"
-  if ! CAPTURED=$("$BQ" run --class short --max-wait 900 -- env "CARGO_TARGET_DIR=$CARGO_TARGET_DIR" "$@" 2>&1); then
+  if ! CAPTURED=$("$@" 2>&1); then
     printf '%s\n' "$CAPTURED" >&2
     echo "gate-census: $label: FAILED" >&2
     exit 1
@@ -38,12 +28,8 @@ step_capture() {
   printf '%s\n' "$CAPTURED"
 }
 
-# (a) The guard. A filtered cargo test run of a name that does not exist *passes* — it reports
-# "0 passed; N filtered out" and exits 0 — so asking for the test after filtering it would prove
-# nothing about a tree that has no census test at all. So ask --list (unfiltered) first, and refuse
-# the tree if no listed test carries that name. This is also what makes the gate honest while branch
-# gc-weak-perm, which adds the test, is not on main yet: it refuses every merge as vacuous, see
-# docs/ci/BRIMSTONE-GATE-NOTES.md.
+# (a) The guard. A filtered cargo test run of a name that does not exist passes: it reports "0 passed; N filtered out" and exits 0.
+# So ask --list (unfiltered) first, and refuse the tree if no listed test carries that name.
 step_capture "cargo test -p brimstone_core -- --list" \
   cargo test --quiet -p brimstone_core -- --list
 
@@ -53,14 +39,13 @@ CENSUS_PATH=$(printf '%s\n' "$CAPTURED" \
   | sed -e 's/: test$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' || true)
 if [ -z "$CENSUS_PATH" ]; then
   echo "gate would be vacuous: the permanent-space census test does not exist in this tree" >&2
-  echo "  no --list entry names *$CENSUS_SUBSTRING*; it is added by gc-weak-perm" >&2
+  echo "  no --list entry names *$CENSUS_SUBSTRING*" >&2
   exit 1
 fi
 echo "gate-census: census test found in --list as $CENSUS_PATH"
 
-# (b) Run it by that exact name and require the one test to pass. " 1 passed;" is the whole claim: 0
-# passed is a failure, 2 passed would mean the filter matched something else and the gate is no longer
-# naming one test. The space and the semicolon so a "11 passed" line cannot satisfy it either.
+# (b) Run it by that exact name and require the one test to pass. " 1 passed;" is the whole claim: 0 passed is a failure, 2 passed
+# would mean the filter matched something else. The space and the semicolon so that "11 passed" cannot satisfy it either.
 step_capture "cargo test -p brimstone_core $CENSUS_PATH -- --exact" \
   cargo test --quiet -p brimstone_core "$CENSUS_PATH" -- --exact
 if ! printf '%s\n' "$CAPTURED" | grep -q " 1 passed;"; then

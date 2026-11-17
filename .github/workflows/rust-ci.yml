@@ -1,0 +1,277 @@
+# Build and test checks for the engine. `rust-gate` is the check to require: it always runs and passes only if every job below it
+# succeeded, so a skipped, cancelled or missing job cannot look like a pass. Nothing here deploys, publishes or uses a secret.
+#
+# What runs on every push to every branch and on every pull request:
+#   fmt-clippy        the project's formatter (cargo bfmt) and clippy with warnings denied
+#   unit-tests        cargo test: unit and snapshot tests of every workspace crate
+#   integration       the integration runner (first-party tests plus the whole of test262, see below) in five builds:
+#                     debug, release, release + gc_stress_test, release + handle_stats, nightly without alloc_error
+#   gc-verify         the heap-verifier unit tests, the permanent-space census, and the GC-sensitive test subset under
+#                     a 4096-byte allocation window with the verifier on (scripts/gate-gc-verify.sh, scripts/gate-census.sh)
+#   build-extra       the performance suite and the benchmarks compile; the fuzzer target builds
+#   macos, windows    the engine builds and runs the integration tests on macOS; it builds on Windows
+#   proof-inventory   the proof matrix equals what is on disk and no frozen statement was removed (the proofs themselves run in
+#                     verus.yml)
+#
+# test262: the suite is checked out at the commit pinned in tests/test262/install_test262.sh (tools/ci/fetch-test262.sh) and the
+# runner runs ALL of it, with --ignore-unimplemented as the project's own runner documents (tests/README.md): tests of features the
+# engine does not implement yet (SharedArrayBuffer, Atomics) are not run. Nothing is sampled or sharded. The full run is about
+# 30 to 60 minutes of CPU, so it fits one 4-vCPU hosted runner within the timeouts below (the timings in docs/ci are estimates until
+# the first runs are recorded).
+name: rust-ci
+on:
+  pull_request:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One run per branch, commit and event; an older commit's checks keep running, because their result is still wanted.
+  group: rust-ci-${{ github.ref }}-${{ github.sha }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CARGO_TERM_COLOR: never
+  CARGO_NET_RETRY: 10
+  # The public lucina repository holds the proof-CI launcher; this full commit id is what is built (tools/ci/fetch-lucina-ci.sh).
+  LUCINA_CI_COMMIT: 50aa6facc8589909e2504bf0e5d3bd6e22e3dd9e
+  # A dated nightly for the one job that needs a nightly compiler, so that the job does not change when upstream does.
+  NIGHTLY_TOOLCHAIN: nightly-2026-11-10
+
+jobs:
+  fmt-clippy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-registry-
+      - name: Toolchain (the channel of rust-toolchain.toml)
+        run: |
+          channel=$(sed -n 's/^channel *= *"\(.*\)".*/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal -c rustfmt -c clippy --no-self-update
+      - name: Format (cargo bfmt, the project's formatter; --install fetches its pinned rustfmt)
+        run: cargo bfmt --install --check
+      - name: Clippy, warnings denied
+        run: cargo clippy --locked -- -D warnings
+
+  unit-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-registry-
+      - name: Toolchain (the channel of rust-toolchain.toml)
+        run: |
+          channel=$(sed -n 's/^channel *= *"\(.*\)".*/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --no-self-update
+      - name: Unit and snapshot tests of every crate
+        run: cargo test --locked --workspace --no-fail-fast
+
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: debug
+            toolchain: pinned
+            args: ''
+          - name: release
+            toolchain: pinned
+            args: --release
+          - name: gc-stress
+            toolchain: pinned
+            args: --release --features gc_stress_test
+          - name: handle-stats
+            toolchain: pinned
+            args: --release --features handle_stats
+          - name: nightly-no-alloc-error
+            toolchain: nightly
+            args: --release --no-default-features --features nightly
+    name: integration (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-registry-
+      - name: Toolchain
+        env:
+          KIND: ${{ matrix.toolchain }}
+        run: |
+          if [ "$KIND" = nightly ]; then
+            rustup toolchain install "$NIGHTLY_TOOLCHAIN" --profile minimal --no-self-update
+            echo "RUSTUP_TOOLCHAIN=$NIGHTLY_TOOLCHAIN" >> "$GITHUB_ENV"
+          else
+            channel=$(sed -n 's/^channel *= *"\(.*\)".*/\1/p' rust-toolchain.toml)
+            rustup toolchain install "$channel" --profile minimal --no-self-update
+          fi
+      - name: test262 at the pinned commit
+        run: tools/ci/fetch-test262.sh
+      - name: Integration tests (first-party suite and all of test262)
+        env:
+          ARGS: ${{ matrix.args }}
+        run: |
+          # $ARGS is word-split on purpose: it holds cargo flags such as `--release --features handle_stats`.
+          # shellcheck disable=SC2086
+          cargo brimstone-test $ARGS -- --reindex --ignore-unimplemented
+
+  gc-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-registry-
+      - name: Toolchain (the channel of rust-toolchain.toml)
+        run: |
+          channel=$(sed -n 's/^channel *= *"\(.*\)".*/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --no-self-update
+      - name: test262 at the pinned commit
+        run: tools/ci/fetch-test262.sh
+      - name: Permanent-space census
+        run: bash scripts/gate-census.sh
+      - name: Heap verifier tests and the GC-sensitive test subset
+        run: bash scripts/gate-gc-verify.sh
+
+  build-extra:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-registry-
+      - name: Toolchain (the channel of rust-toolchain.toml)
+        run: |
+          channel=$(sed -n 's/^channel *= *"\(.*\)".*/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --no-self-update
+      - name: Performance suite
+        run: cargo build --locked -p brimstone_perf
+      - name: Benchmarks compile
+        run: cargo bench --locked --no-run
+      - name: Fuzzer target
+        run: ./tests/fuzz/build.sh
+
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-registry-
+      - name: Toolchain (the channel of rust-toolchain.toml)
+        run: |
+          channel=$(sed -n 's/^channel *= *"\(.*\)".*/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --no-self-update
+      - name: test262 at the pinned commit
+        run: tools/ci/fetch-test262.sh
+      - name: Integration tests
+        run: cargo brimstone-test -- --reindex --ignore-unimplemented
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-registry-
+      - name: Toolchain (the channel of rust-toolchain.toml)
+        run: |
+          channel=$(sed -n 's/^channel *= *"\(.*\)".*/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --no-self-update
+      - name: Build
+        run: cargo build --locked
+
+  proof-inventory:
+    # The cheap half of the proof gate, repeated here so that a change that adds or moves a proof is refused by the first check to
+    # finish. The launcher is built from the pinned commit of the public lucina repository, never from this tree.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Launcher from the pinned commit
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          bin=$(RUSTUP_TOOLCHAIN=stable bash tools/ci/fetch-lucina-ci.sh "$LUCINA_CI_COMMIT" "$RUNNER_TEMP/lucina-ci-src")
+          echo "LUCINA_CI=$bin" >> "$GITHUB_ENV"
+      - name: Base commit for the statement check
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          base=HEAD
+          if git rev-parse --verify -q "origin/$DEFAULT_BRANCH" > /dev/null; then base="origin/$DEFAULT_BRANCH"; fi
+          if [ "$EVENT" = pull_request ]; then
+            base="origin/$BASE_REF"
+          elif [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            base="$BEFORE"
+          fi
+          echo "BASE=$base" >> "$GITHUB_ENV"
+      - name: Proof inventory and frozen statements
+        run: bash scripts/gate-lucina-ci.sh
+
+  rust-gate:
+    needs: [fmt-clippy, unit-tests, integration, gc-verify, build-extra, macos, windows, proof-inventory]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job finished with success
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key)=\(.value.result)"'
+          if ! echo "$NEEDS" | jq -e 'length == 8 and (to_entries | all(.value.result == "success"))' > /dev/null; then
+            echo "::error::a job did not succeed (failed, skipped or cancelled)"
+            exit 1
+          fi

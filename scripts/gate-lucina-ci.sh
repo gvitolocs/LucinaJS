@@ -1,12 +1,17 @@
 #!/bin/bash
-# Merge gate "lucina-ci inventory, spec, roles" (.lucina/pipeline.toml). Runs from the repo root on
-# the merge candidate. The INSTALLED lucina-ci judges tools/ci/ and docs/ci/, so a branch must not
-# edit the tool it is checked with: tools/ci/ is in gate_files and this script names the binary in
-# ~/.local/bin, not a path in the tree. Stops at the first failing step.
+# Gate "proof inventory and frozen statements". Runs from the repository root with the launcher named by LUCINA_CI (the binary that
+# tools/ci/fetch-lucina-ci.sh builds from a pinned commit of the public lucina repository; it is not built from this tree, so a
+# change to this repository cannot edit the tool it is checked with).
+#   inventory --check: docs/ci/PROOF-MATRIX.md and tools/ci/proof-inventory.tsv are exactly what is on disk, so a proof that is
+#                      added, removed or moved changes the list and cannot stay outside CI.
+#   spec --check:      no frozen statement of a shipped proof is removed or weakened relative to the base commit (BASE, required: the caller names the
+#                      base).
+# Stops at the first failing step.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-CI="$HOME/.local/bin/lucina-ci"
+CI=${LUCINA_CI:?set LUCINA_CI to the lucina-ci binary}
+BASE=${BASE:?set BASE to the base commit or ref}
 
 step() {
   local name="$1"
@@ -20,6 +25,5 @@ step() {
 }
 
 step "lucina-ci inventory --check" "$CI" inventory --check
-step "lucina-ci spec --check --merge-gate" "$CI" spec --check --merge-gate
-step "lucina-ci roles --check --merge-gate" "$CI" roles --check --merge-gate
+step "lucina-ci spec --check --base $BASE" "$CI" spec --check --base "$BASE"
 echo "gate-lucina-ci: all steps ok"

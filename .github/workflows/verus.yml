@@ -1,0 +1,244 @@
+# Proof CI: docs/ci/PROOF-MATRIX.md lists every proof unit of this repository (shipped files with `//@` proofs checked by Verus, the
+# mutants scripts that plant a bug and require Verus to refuse it, and the global mutation list). EVERY unit runs on EVERY push to
+# EVERY branch and on every pull request: there is no path filter, no optional unit, no continue-on-error and no skipping `if:` on a
+# proof. A unit that cannot finish fails its job; it is never dropped.
+#
+# The only check to require is `verus-gate`: it always runs and passes only if
+#   - the plan holds exactly the units of tools/ci/proof-inventory.tsv (no unit can be left out of the plan),
+#   - every job finished as it had to, and
+#   - every planned unit has a `verified` report for this commit.
+# A skipped, cancelled or missing job therefore cannot look like a pass.
+#
+# One runner per job, a cgroup memory cap per proof, a report per proof. The proof-CI launcher `lucina-ci` is built from a pinned
+# commit of the public lucina repository (tools/ci/fetch-lucina-ci.sh), never from this tree, and Verus is the release pinned in
+# references/upstream.lock with its sha256 checked before it is unpacked (tools/ci/install-verus.sh).
+name: verus
+on:
+  pull_request:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One run per branch, commit and event; an older commit's proofs keep running, because their result is still wanted.
+  group: verus-${{ github.ref }}-${{ github.sha }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: never
+  CARGO_NET_RETRY: 10
+  # Full commit id of https://github.com/gvitolocs/lucina from which the launcher is built.
+  LUCINA_CI_COMMIT: 50aa6facc8589909e2504bf0e5d3bd6e22e3dd9e
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      any: ${{ steps.plan.outputs.any }}
+      scope: ${{ steps.plan.outputs.scope }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Build the launcher from the pinned commit
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          bin=$(RUSTUP_TOOLCHAIN=stable bash tools/ci/fetch-lucina-ci.sh "$LUCINA_CI_COMMIT" "$RUNNER_TEMP/lucina-ci-src")
+          echo "LUCINA_CI=$bin" >> "$GITHUB_ENV"
+          echo "LUCINA_CI_DIR=$RUNNER_TEMP/lucina-ci-src/tools/ci/lucina-ci" >> "$GITHUB_ENV"
+      - name: Launcher tests
+        run: RUSTUP_TOOLCHAIN=stable cargo test --release --locked --manifest-path "$LUCINA_CI_DIR/Cargo.toml"
+      - name: Every proof is in the inventory
+        run: |
+          "$LUCINA_CI" inventory --check
+      - name: No frozen statement was removed or weakened
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          base=HEAD
+          if git rev-parse --verify -q "origin/$DEFAULT_BRANCH" > /dev/null; then base="origin/$DEFAULT_BRANCH"; fi
+          if [ "$EVENT" = pull_request ]; then
+            base="origin/$BASE_REF"
+          elif [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            base="$BEFORE"
+          fi
+          echo "statements are compared with $base"
+          "$LUCINA_CI" spec --check --base "$base"
+      - id: plan
+        name: Plan every unit
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          mkdir -p plan
+          # `--event all` is not a push, so the launcher plans the FULL set instead of only the units a diff reaches; no --ref, so
+          # no branch name (for example proof/<unit>) can narrow it either.
+          "$LUCINA_CI" plan --event all --sha "$SHA" --plan plan/plan.txt --output "$GITHUB_OUTPUT"
+          cp "$LUCINA_CI" plan/lucina-ci
+      - name: The plan is the whole inventory
+        run: |
+          grep -v '^#' tools/ci/proof-inventory.tsv | grep -v '^[[:space:]]*$' | cut -f1 | LC_ALL=C sort > inventory-units.txt
+          LC_ALL=C sort plan/plan.txt > plan-units.txt
+          echo "inventory: $(wc -l < inventory-units.txt) units, plan: $(wc -l < plan-units.txt) units"
+          test -s inventory-units.txt
+          if ! diff inventory-units.txt plan-units.txt; then
+            echo "::error::the plan is not the whole inventory"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plan
+          path: plan/
+          retention-days: 7
+
+  selftest:
+    # Proves on a real runner that the cap holds, timeouts fire and a false proof fails. No selftest, no gate.
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plan
+          path: plan
+      - run: chmod +x plan/lucina-ci tools/ci/install-verus.sh
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/verus/*.zip
+          key: verus-zip-${{ hashFiles('references/upstream.lock') }}
+      - run: tools/ci/install-verus.sh ~/verus
+      - run: plan/lucina-ci selftest --out reports-selftest --verus ~/verus/verus-x86-linux/verus
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: selftest-reports
+          path: reports-selftest/
+          retention-days: 30
+
+  prove:
+    # The matrix has one row per group and phase of the plan: the 9 shipped proof files (`proofs`), the 5 mutants scripts
+    # (`mutants` of group brimstone) and the global mutation list (`mutants` of group unhosted).
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: ${{ matrix.group }} (${{ matrix.phase }})
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plan
+          path: plan
+      - run: chmod +x plan/lucina-ci tools/ci/install-verus.sh
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/verus/*.zip
+          key: verus-zip-${{ hashFiles('references/upstream.lock') }}
+      - run: tools/ci/install-verus.sh ~/verus
+      - name: Run
+        env:
+          GROUP: ${{ matrix.group }}
+          PHASE: ${{ matrix.phase }}
+        run: |
+          plan/lucina-ci run --group "$GROUP" --phase "$PHASE" --plan plan/plan.txt \
+            --verus ~/verus/verus-x86-linux/verus --out reports --unit-timeout-min 60
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: reports-${{ matrix.group }}-${{ matrix.phase }}-${{ strategy.job-index }}
+          path: reports/
+          retention-days: 30
+
+  fncache-by-name:
+    # The unit mutants/fncache runs `verification/fncache/mutants.sh` with no argument, which covers the proof disk_rules only; the
+    # other proofs of that script (patch_rules, prov_rules, wire, partition) are run here by name, so that none of its mutants is left
+    # unrun. The names are read from the script itself, so a name added to it is run too.
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: chmod +x tools/ci/install-verus.sh
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/verus/*.zip
+          key: verus-zip-${{ hashFiles('references/upstream.lock') }}
+      - run: tools/ci/install-verus.sh ~/verus
+      - name: Mutants of every named proof
+        run: |
+          export VERUS="$HOME/verus/verus-x86-linux/verus"
+          names=$(sed -n 's/^    \([a-z_]*\)) mutants_.*/\1/p' verification/fncache/mutants.sh | grep -v '^disk_rules$')
+          echo "proofs run by name: $names"
+          test "$(echo "$names" | wc -w)" -ge 4
+          for n in $names; do
+            echo "=== $n"
+            timeout 3600 bash verification/fncache/mutants.sh "$n" | tee "mutants-$n.log"
+            test "${PIPESTATUS[0]}" = 0
+            grep -q '^baseline: verifies$' "mutants-$n.log"
+            grep -q '^mutants: [0-9]* refused by verification' "mutants-$n.log"
+          done
+
+  verus-gate:
+    needs: [plan, selftest, prove, fncache-by-name]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Every job finished as it had to
+        env:
+          PLAN: ${{ needs.plan.result }}
+          SELFTEST: ${{ needs.selftest.result }}
+          PROVE: ${{ needs.prove.result }}
+          FNCACHE: ${{ needs.fncache-by-name.result }}
+          ANY: ${{ needs.plan.outputs.any }}
+        run: |
+          echo "plan=$PLAN selftest=$SELFTEST prove=$PROVE fncache=$FNCACHE any=$ANY"
+          if [ "$PLAN" != success ]; then echo "::error::the plan job failed, so no proof ran"; exit 1; fi
+          if [ "$SELFTEST" != success ]; then echo "::error::the self-test failed: the cap or the verdicts cannot be trusted on this runner"; exit 1; fi
+          if [ "$ANY" != true ]; then echo "::error::the plan holds no proof"; exit 1; fi
+          if [ "$PROVE" != success ]; then echo "::error::the proof jobs ended as $PROVE"; exit 1; fi
+          if [ "$FNCACHE" != success ]; then echo "::error::the fncache mutants by name ended as $FNCACHE"; exit 1; fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plan
+          path: plan
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: reports-*
+          path: all-reports
+          merge-multiple: true
+      - name: The plan is the whole inventory of this commit
+        run: |
+          grep -v '^#' tools/ci/proof-inventory.tsv | grep -v '^[[:space:]]*$' | cut -f1 | LC_ALL=C sort > inventory-units.txt
+          LC_ALL=C sort plan/plan.txt > plan-units.txt
+          test -s inventory-units.txt
+          diff inventory-units.txt plan-units.txt
+      - name: Every planned proof verified on this commit
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          chmod +x plan/lucina-ci
+          plan/lucina-ci gate --plan plan/plan.txt --reports all-reports --sha "$SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          test "${PIPESTATUS[0]}" = 0
