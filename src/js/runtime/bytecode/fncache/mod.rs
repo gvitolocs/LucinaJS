@@ -8,13 +8,25 @@
 //! `BytecodeProgramGenerator::gen_function`.
 
 pub mod disk;
+// proof text: the blocks hold //@ proof lines; sites: src/js/runtime/bytecode/fncache/disk_rules.rs:346, 368
+#[allow(clippy::single_match)]
 pub mod disk_rules;
 pub mod key;
 pub mod partition;
+// proof text: the &mut Vec<u8> signature is part of the proved statement; sites: src/js/runtime/bytecode/fncache/patch_rules.rs:39
+#[allow(clippy::ptr_arg)]
 pub mod patch_rules;
+// proof text: two fncache mutants search the text; sites: src/js/runtime/bytecode/fncache/prov_rules.rs:77
+#[allow(clippy::match_like_matches_macro)]
+// proof text: three mutants search it; sites: src/js/runtime/bytecode/fncache/prov_rules.rs:100
+#[allow(clippy::nonminimal_bool)]
 pub mod prov_rules;
 pub mod secret;
 pub mod template;
+// proof text: ensures stated per Some/None arm, body mirrors it; sites: src/js/runtime/bytecode/fncache/wire.rs:279, 293, 307, 321, 341
+#[allow(clippy::manual_map)]
+// proof text: the proof steps through the arms; sites: src/js/runtime/bytecode/fncache/wire.rs:337, 474, 481, 488, 492, 496, 500, 504
+#[allow(clippy::question_mark)]
 pub mod wire;
 
 use std::path::PathBuf;

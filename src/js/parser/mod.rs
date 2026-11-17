@@ -13,6 +13,8 @@ mod printer;
 pub mod regexp;
 pub mod regexp_parser;
 pub mod reparse;
+// proof text: a reparse mutant searches `i = i - 1;`; sites: src/js/parser/reparse_rules.rs:76
+#[allow(clippy::assign_op_pattern)]
 mod reparse_rules;
 pub mod scope_tree;
 pub mod source;

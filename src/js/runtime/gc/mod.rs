@@ -1,3 +1,7 @@
+// proof text: ensures spells the branch; two mutants search it; sites: src/js/runtime/gc/accounting.rs:157
+#[allow(clippy::implicit_saturating_sub)]
+// proof text: `p = p * 2;` is in three mutant search texts; sites: src/js/runtime/gc/accounting.rs:190
+#[allow(clippy::assign_op_pattern)]
 pub mod accounting;
 mod garbage_collector;
 mod handle;
@@ -7,6 +11,10 @@ mod heap_serializer;
 mod heap_trait_object;
 mod heap_visitor;
 mod pointer;
+// proof text: one mutant; sites: src/js/runtime/gc/sizing.rs:155
+#[allow(clippy::implicit_saturating_sub)]
+// proof text: assign op in proved code; CIJS-03 records no separate reason; sites: src/js/runtime/gc/sizing.rs:171
+#[allow(clippy::assign_op_pattern)]
 mod sizing;
 pub(crate) mod verify;
 mod weak_rules;
