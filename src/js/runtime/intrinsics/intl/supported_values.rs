@@ -7,16 +7,13 @@
 //! value the engine cannot format anything with, and 8.3.2 has no branch that asks for more than the
 //! implementation provides. Nothing in this module invents a value to fill a list out.
 
-use crate::runtime::{
-    Context, EvalResult, Handle, Value,
-    array_object::create_array_from_list,
-    error::range_error,
-    to_string,
-};
-
 use super::locale_data::available_calendars;
 use super::locale_negotiation::canonical_u_value;
 use super::number_format_currency::{load_optional, marker_attributes};
+use crate::runtime::{
+    Context, EvalResult, Handle, Value, array_object::create_array_from_list, error::range_error,
+    to_string,
+};
 
 /// The keys 8.3.2 steps 2 to 7 test, in that order, and step 8's RangeError names them all.
 pub const SUPPORTED_VALUE_KEYS: [&str; 6] = [
@@ -179,11 +176,7 @@ fn time_zone_values(cx: Context) -> Vec<String> {
         // a value the engine can format with, so the parser of that clause filters the name, which
         // leaves the order [`primary_zone_names`] put them in.
         .filter(|name| {
-            cx.locale_cache()
-                .iana_parser()
-                .as_borrowed()
-                .parse(name)
-                != icu_time::TimeZone::UNKNOWN
+            cx.locale_cache().iana_parser().as_borrowed().parse(name) != icu_time::TimeZone::UNKNOWN
         })
         .collect();
 
@@ -324,7 +317,14 @@ mod tests {
     fn the_six_keys_are_the_ones_the_operation_tests() {
         assert_eq!(
             SUPPORTED_VALUE_KEYS,
-            ["calendar", "collation", "currency", "numberingSystem", "timeZone", "unit"]
+            [
+                "calendar",
+                "collation",
+                "currency",
+                "numberingSystem",
+                "timeZone",
+                "unit"
+            ]
         );
     }
 }

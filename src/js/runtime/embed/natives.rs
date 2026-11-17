@@ -219,7 +219,11 @@ pub fn native_jit_info(_: Context, value: Value) -> Option<*const c_void> {
 
 /// Set (or clear, with null) the jit info of a native function. Returns false if the object is not
 /// a native function.
-pub fn set_native_jit_info(_: Context, function: Handle<ObjectValue>, jit_info: *const c_void) -> bool {
+pub fn set_native_jit_info(
+    _: Context,
+    function: Handle<ObjectValue>,
+    jit_info: *const c_void,
+) -> bool {
     if !is_native_function(*function) {
         return false;
     }
@@ -289,7 +293,11 @@ impl EmbedNatives {
         let argc = arguments.len();
         let mut vp = Vec::with_capacity(2 + argc);
         vp.push(*callee.as_value());
-        vp.push(if new_target.is_some() { Value::undefined() } else { *this_value });
+        vp.push(if new_target.is_some() {
+            Value::undefined()
+        } else {
+            *this_value
+        });
         vp.extend(arguments.iter().copied());
 
         // Root the buffer for the duration of the call. Nested native calls push their own buffer,

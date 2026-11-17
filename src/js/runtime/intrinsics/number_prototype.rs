@@ -8,8 +8,7 @@ use crate::{
         eval_result::EvalResult,
         intrinsic_builder::IntrinsicBuilder,
         intrinsics::{
-            intrinsics::Intrinsic,
-            intl::number_format_object::NumberFormatObject,
+            intl::number_format_object::NumberFormatObject, intrinsics::Intrinsic,
             number_object::NumberObject,
         },
         object_value::ObjectValue,

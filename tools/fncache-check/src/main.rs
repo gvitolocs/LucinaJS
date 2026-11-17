@@ -26,8 +26,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use brimstone_core::common::options::OptionsBuilder;
-use brimstone_core::runtime::bytecode::fncache::key::UncacheableReason;
 use brimstone_core::runtime::bytecode::fncache::FunctionCacheStats;
+use brimstone_core::runtime::bytecode::fncache::key::UncacheableReason;
 use brimstone_core::runtime::bytecode::lazy::generate_all_lazy_functions;
 use brimstone_core::runtime::embed;
 use brimstone_core::runtime::gc::HandleScope;
@@ -35,7 +35,10 @@ use brimstone_core::runtime::{Context, ContextBuilder};
 
 fn new_context(disk: Option<&Path>) -> Context {
     let options = Rc::new(OptionsBuilder::new().lazy_functions(true).build().unwrap());
-    let cx = ContextBuilder::new().set_options(options).build().expect("context");
+    let cx = ContextBuilder::new()
+        .set_options(options)
+        .build()
+        .expect("context");
     embed::set_function_cache_enabled(cx, true);
     embed::set_realm_cache_partition(cx, cx.initial_realm(), b"https://oracle.test");
     if let Some(dir) = disk {
@@ -109,7 +112,12 @@ fn median(mut v: Vec<Duration>) -> Duration {
 }
 
 fn short_name(path: &str) -> String {
-    path.rsplit('/').next().unwrap_or(path).chars().take(48).collect()
+    path.rsplit('/')
+        .next()
+        .unwrap_or(path)
+        .chars()
+        .take(48)
+        .collect()
 }
 
 /// Fill the cache from `a` in `cx`, then check `b` in `cx` (or in a fresh context with the same
@@ -134,7 +142,11 @@ fn fill_then_check(a: &str, b: &str, disk: Option<&Path>) {
     print_stats("  fill phase", &delta(&FunctionCacheStats::default(), &before_fill));
 
     // Check B: same context, or a fresh one that only has the disk store.
-    let cx_check = if disk.is_some() { new_context(disk) } else { cx };
+    let cx_check = if disk.is_some() {
+        new_context(disk)
+    } else {
+        cx
+    };
     embed::set_function_cache_verify(cx_check, true);
     let before = stats(cx_check);
     let t_check = compile_and_generate_all(cx_check, b, &b_text);
@@ -205,12 +217,18 @@ fn main() {
 
     match positional.first().map(|s| s.as_str()) {
         Some("self") => {
-            let file = positional.get(1).expect("usage: self <file.js> [--disk DIR]");
+            let file = positional
+                .get(1)
+                .expect("usage: self <file.js> [--disk DIR]");
             fill_then_check(file, file, disk.as_deref());
         }
         Some("pair") => {
-            let a = positional.get(1).expect("usage: pair <A.js> <B.js> [--disk DIR]");
-            let b = positional.get(2).expect("usage: pair <A.js> <B.js> [--disk DIR]");
+            let a = positional
+                .get(1)
+                .expect("usage: pair <A.js> <B.js> [--disk DIR]");
+            let b = positional
+                .get(2)
+                .expect("usage: pair <A.js> <B.js> [--disk DIR]");
             fill_then_check(a, b, disk.as_deref());
             time_cold_vs_warm(a, b);
         }
@@ -254,7 +272,9 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("usage: fncache-check <self <file.js> | pair <A.js> <B.js> | fill <A.js> --disk DIR | check <B.js> --disk DIR> [--disk DIR]");
+            eprintln!(
+                "usage: fncache-check <self <file.js> | pair <A.js> <B.js> | fill <A.js> --disk DIR | check <B.js> --disk DIR> [--disk DIR]"
+            );
             std::process::exit(2);
         }
     }

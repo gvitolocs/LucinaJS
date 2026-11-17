@@ -8,11 +8,11 @@ use crate::{
         Context, EvalResult, Handle, HeapItemKind, HeapPtr, PropertyKey, Value,
         alloc_error::AllocResult,
         bytecode::function::BytecodeFunction,
-        embed,
         collections::{
             ArrayInstance, BsVecField, FastHasher, HashMapInstance, InlineArray, VecInstance,
             hash_map::BsHashMapField,
         },
+        embed,
         gc::{AnyHeapItem, HeapItem, HeapVisitor},
         module::{
             execute::module_evaluate,

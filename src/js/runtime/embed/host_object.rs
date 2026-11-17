@@ -124,7 +124,9 @@ impl VirtualObject for Handle<HostObject> {
 
         if header.is_proxy() {
             let desc = host(cx).proxy_get_own_property(cx, header.handler(), object, key)?;
-            return desc.map(|desc| descriptor_to_property(cx, desc)).transpose();
+            return desc
+                .map(|desc| descriptor_to_property(cx, desc))
+                .transpose();
         }
 
         let property = ordinary_get_own_property(cx, object, key);
@@ -148,7 +150,13 @@ impl VirtualObject for Handle<HostObject> {
     ) -> EvalResult<bool> {
         let header = self.header();
         if header.is_proxy() {
-            return host(cx).proxy_define_property(cx, header.handler(), self.as_object(), key, desc);
+            return host(cx).proxy_define_property(
+                cx,
+                header.handler(),
+                self.as_object(),
+                key,
+                desc,
+            );
         }
 
         ordinary_define_own_property(cx, self.as_object(), key, desc)
@@ -186,7 +194,14 @@ impl VirtualObject for Handle<HostObject> {
     ) -> EvalResult<bool> {
         let header = self.header();
         if header.is_proxy() {
-            return host(cx).proxy_set(cx, header.handler(), self.as_object(), key, value, receiver);
+            return host(cx).proxy_set(
+                cx,
+                header.handler(),
+                self.as_object(),
+                key,
+                value,
+                receiver,
+            );
         }
 
         ordinary_set(cx, self.as_object(), key, value, receiver)

@@ -5,21 +5,15 @@
 //! The instance and the reading of its options are [`super::segmenter_object`]; the object `segment`
 //! returns and everything a program then does with it are [`super::segments_object`].
 
-use crate::runtime::{
-    Context, Handle, Realm,
-    alloc_error::AllocResult,
-    error::type_error,
-    intrinsic_builder::IntrinsicBuilder,
-    intrinsics::intrinsics::Intrinsic,
-    object_value::ObjectValue,
-    ordinary_object::ordinary_object_create,
-    to_string,
-};
-use crate::{intrinsic_methods, runtime_fn};
-
 use super::number_format_prototype::{report_str, report_value};
 use super::segmenter_object::SegmenterObject;
 use super::segments_object::SegmentsObject;
+use crate::runtime::{
+    Context, Handle, Realm, alloc_error::AllocResult, error::type_error,
+    intrinsic_builder::IntrinsicBuilder, intrinsics::intrinsics::Intrinsic,
+    object_value::ObjectValue, ordinary_object::ordinary_object_create, to_string,
+};
+use crate::{intrinsic_methods, runtime_fn};
 
 /// %Intl.Segmenter.prototype%
 /// (https://tc39.es/ecma402/#sec-properties-of-the-intl-segmenter-prototype-object), 19.3.

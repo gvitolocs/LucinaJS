@@ -1,7 +1,6 @@
 use std::{alloc::Layout, mem::size_of, ops::Range, ptr::NonNull};
 
 use super::{accounting, sizing};
-
 #[cfg(feature = "alloc_error")]
 use crate::runtime::alloc_error::AllocError;
 use crate::{
@@ -13,8 +12,8 @@ use crate::{
         gc::{
             GcType, HeapPtr, HeapVisitor,
             garbage_collector::GarbageCollector,
-            heap_item::{HeapItemKind, byte_size_for_kind, for_each_heap_item},
             handle::HandleContext,
+            heap_item::{HeapItemKind, byte_size_for_kind, for_each_heap_item},
             heap_serializer::{HeapSpaceDeserializer, calculate_extra_offset},
         },
     },
@@ -116,8 +115,16 @@ impl Default for Accounting {
         let tunables = GcTunables::default();
         Accounting {
             associated_bytes: 0,
-            associated_threshold: accounting::threshold(0, tunables.malloc_base, tunables.low_tenths),
-            host_threshold: accounting::threshold(0, tunables.allocation_threshold, tunables.low_tenths),
+            associated_threshold: accounting::threshold(
+                0,
+                tunables.malloc_base,
+                tunables.low_tenths,
+            ),
+            host_threshold: accounting::threshold(
+                0,
+                tunables.allocation_threshold,
+                tunables.low_tenths,
+            ),
             tunables,
         }
     }
@@ -441,7 +448,9 @@ impl Heap {
         let max_heap = Self::effective_max_heap(cx);
         let min_heap = cx.options.min_heap_size;
         let semispace = cx.heap.semispace_size();
-        debug_assert!(heap_size.is_power_of_two() && max_heap.is_power_of_two() && heap_size <= max_heap);
+        debug_assert!(
+            heap_size.is_power_of_two() && max_heap.is_power_of_two() && heap_size <= max_heap
+        );
 
         // The live size after the last collection predicts this one: grow in the same collection
         // rather than copying everything twice.
@@ -537,8 +546,10 @@ impl Heap {
                 t.large_heap,
             )
         };
-        a.associated_threshold = accounting::threshold(a.associated_bytes, t.malloc_base, factor(a.associated_bytes));
-        a.host_threshold = accounting::threshold(host_bytes, t.allocation_threshold, factor(host_bytes));
+        a.associated_threshold =
+            accounting::threshold(a.associated_bytes, t.malloc_base, factor(a.associated_bytes));
+        a.host_threshold =
+            accounting::threshold(host_bytes, t.allocation_threshold, factor(host_bytes));
     }
 
     /// The largest heap under JSGC_MAX_BYTES (`accounting::max_heap_for`), never below the current heap.
@@ -589,7 +600,8 @@ impl Heap {
         let live = self.bytes_allocated();
         let now = std::time::Instant::now();
         self.stats.high_frequency = self.stats.last_gc_at.is_none_or(|last| {
-            now.duration_since(last) < std::time::Duration::from_millis(self.stats.accounting.tunables.high_frequency_ms)
+            now.duration_since(last)
+                < std::time::Duration::from_millis(self.stats.accounting.tunables.high_frequency_ms)
         });
         self.stats.last_gc_at = Some(now);
         self.stats.gc_count += 1;
@@ -624,7 +636,9 @@ impl Heap {
     pub fn census(&self) -> Vec<(String, usize, usize)> {
         self.census
             .iter()
-            .filter_map(|&(kind, count, bytes)| kind.map(|kind| (format!("{kind:?}"), count, bytes)))
+            .filter_map(|&(kind, count, bytes)| {
+                kind.map(|kind| (format!("{kind:?}"), count, bytes))
+            })
             .collect()
     }
 

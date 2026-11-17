@@ -45,7 +45,9 @@ impl IntlObject {
         // 8.2.7, Intl.PluralRules 8.2.8, Intl.RelativeTimeFormat 8.2.9 and Intl.Segmenter 8.2.10.
         builder.data(
             cx.names.collator(),
-            realm.get_intrinsic(Intrinsic::CollatorConstructor).as_value(),
+            realm
+                .get_intrinsic(Intrinsic::CollatorConstructor)
+                .as_value(),
         )?;
         builder.data(
             cx.names.date_time_format(),
@@ -144,15 +146,14 @@ pub(crate) fn canonicalize_locale_list_argument(
     // second of the two is why `new Intl.NumberFormat(new Intl.Locale("de-AT"))` asks for Austrian
     // German, and why the Locale's own tag is what is read rather than the result of a `toString` a
     // subclass may have replaced.
-    let locales_object = if locales.is_string()
-        || LocaleObject::initialized_locale(cx, locales).is_some()
-    {
-        create_array_from_list(cx, &[locales])?.as_object()
-    } else {
-        // Step 4: ? ToObject(locales), so that an array, an array-like or any other iterable reads
-        // by index.
-        to_object(cx, locales)?
-    };
+    let locales_object =
+        if locales.is_string() || LocaleObject::initialized_locale(cx, locales).is_some() {
+            create_array_from_list(cx, &[locales])?.as_object()
+        } else {
+            // Step 4: ? ToObject(locales), so that an array, an array-like or any other iterable reads
+            // by index.
+            to_object(cx, locales)?
+        };
 
     // Step 5: ? LengthOfArrayLike(localesObj).
     let length = length_of_array_like(cx, locales_object)?;

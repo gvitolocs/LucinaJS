@@ -183,7 +183,11 @@ impl Guard {
 
 impl Drop for Guard {
     fn drop(&mut self) {
-        self.shared.entries.lock().unwrap().retain(|entry| entry.id != self.id);
+        self.shared
+            .entries
+            .lock()
+            .unwrap()
+            .retain(|entry| entry.id != self.id);
     }
 }
 

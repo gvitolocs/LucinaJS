@@ -6,6 +6,10 @@
 //! [`super::date_time_format_object`]; this file is only the methods a program calls and the function
 //! `format` hands back.
 
+use super::date_time_format_core::{
+    DateTimePart, Formattable, TemporalKind, TemporalSource, Width,
+};
+use super::date_time_format_object::{DateTimeFormatObject, ResolvedDateTimeFormat};
 use crate::{
     intrinsic_methods,
     runtime::{
@@ -34,9 +38,6 @@ use crate::{
     },
     runtime_fn,
 };
-
-use super::date_time_format_core::{DateTimePart, Formattable, TemporalKind, TemporalSource, Width};
-use super::date_time_format_object::{DateTimeFormatObject, ResolvedDateTimeFormat};
 
 /// %Intl.DateTimeFormat.prototype% (https://tc39.es/ecma402/#sec-properties-of-the-intl-datetimeformat-prototype-object),
 /// 11.3.
@@ -80,7 +81,10 @@ impl DateTimeFormatPrototype {
 
         let Some(resolved) = date_time_format.resolved() else {
             // The question `unwrap_initialized` has already answered.
-            return type_error(cx, "Intl.DateTimeFormat method called on an uninitialized instance");
+            return type_error(
+                cx,
+                "Intl.DateTimeFormat method called on an uninitialized instance",
+            );
         };
 
         // The four String slots of 11.4 are raw pointers inside the instance's own data, so they go
@@ -248,10 +252,7 @@ fn format(cx, _, arguments) {
         .private_element_find(cx, cx.symbols.bound_date_time_format().cast());
 
     let Some(captured) = captured else {
-        return type_error(
-            cx,
-            "Intl.DateTimeFormat format function without its captured instance",
-        );
+        return type_error(cx, "Intl.DateTimeFormat format function without its captured instance");
     };
 
     let date_time_format = captured.value().cast::<DateTimeFormatObject>();
@@ -425,12 +426,7 @@ fn report_resolved_options(
         let name = hour_cycle.as_str();
 
         report_str(cx, options, cx.names.hour_cycle(), name)?;
-        report_value(
-            cx,
-            options,
-            cx.names.hour12(),
-            cx.bool(name == "h11" || name == "h12"),
-        )?;
+        report_value(cx, options, cx.names.hour12(), cx.bool(name == "h11" || name == "h12"))?;
     }
 
     // The rows 11.3.2 step 5.2.2 reads off `[[DateTimeFormat]]`, which is the matched pattern: their

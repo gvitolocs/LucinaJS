@@ -359,7 +359,11 @@ impl<'a> Analyzer<'a> {
         };
 
         // The enclosing arrow functions and the nearest non-arrow function, bottom first
-        let arrows: Vec<bool> = self.function_stack.iter().map(|entry| entry.is_arrow_function).collect();
+        let arrows: Vec<bool> = self
+            .function_stack
+            .iter()
+            .map(|entry| entry.is_arrow_function)
+            .collect();
         let Some(first) = chain_start(&arrows) else {
             return;
         };
@@ -369,12 +373,15 @@ impl<'a> Analyzer<'a> {
             function_chain[i] = entry.to_bits();
         }
 
-        let allow_super = self.allow_super_member_stack.last().map(|entry| match entry {
-            AllowSuperStackEntry::Allow { is_static, home_object_scope } => {
-                Some((*is_static, *home_object_scope))
-            }
-            AllowSuperStackEntry::Disallow => None,
-        });
+        let allow_super = self
+            .allow_super_member_stack
+            .last()
+            .map(|entry| match entry {
+                AllowSuperStackEntry::Allow { is_static, home_object_scope } => {
+                    Some((*is_static, *home_object_scope))
+                }
+                AllowSuperStackEntry::Disallow => None,
+            });
 
         info.analyzer = Some(AnalyzerSnapshot {
             in_strict_mode_context: self.is_in_strict_mode_context(),
@@ -1951,7 +1958,9 @@ pub fn analyze_reparsed_function<'a>(
         analyzer.enter_strict_mode_context();
     }
     for bits in &snapshot.function_chain[..snapshot.function_chain_len as usize] {
-        analyzer.function_stack.push(FunctionStackEntry::from_bits(*bits));
+        analyzer
+            .function_stack
+            .push(FunctionStackEntry::from_bits(*bits));
     }
     if let Some(entry) = snapshot.allow_super {
         analyzer.allow_super_member_stack.push(match entry {

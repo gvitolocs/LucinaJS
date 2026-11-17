@@ -150,7 +150,9 @@ fn walk_back(src: &[u8], end: Pos, depth: u32) -> Option<Chain> {
 
             match walk_back(src, before, depth + 1) {
                 Some(Chain::Name(name)) => Some(Chain::Name(format!("{name}({ELLIPSIS})"))),
-                Some(Chain::Partial(suffix)) => Some(Chain::Partial(format!("{suffix}({ELLIPSIS})"))),
+                Some(Chain::Partial(suffix)) => {
+                    Some(Chain::Partial(format!("{suffix}({ELLIPSIS})")))
+                }
                 // The callee of the call is not a name either, but this is still a call of something.
                 None => Some(Chain::Partial(String::new())),
             }
@@ -181,7 +183,10 @@ fn push_member(base: Option<Chain>, suffix: &str) -> Chain {
 fn chain_end(src: &[u8], start: Pos) -> Option<Pos> {
     let first = skip_whitespace_forward(src, start);
 
-    if !src.get(first).is_some_and(|byte| is_ident_start_byte(*byte)) {
+    if !src
+        .get(first)
+        .is_some_and(|byte| is_ident_start_byte(*byte))
+    {
         return None;
     }
 
@@ -250,7 +255,10 @@ fn computed_suffix(src: &[u8], start: Pos, end: Pos) -> Option<String> {
 /// The name a string literal stands for as a computed property key, if it is a valid name.
 fn identifier_of_string_literal(key: &str) -> Option<&str> {
     let bytes = key.as_bytes();
-    let quote = bytes.first().copied().filter(|byte| matches!(byte, b'\'' | b'"'))?;
+    let quote = bytes
+        .first()
+        .copied()
+        .filter(|byte| matches!(byte, b'\'' | b'"'))?;
 
     if bytes.len() < 2 || bytes[bytes.len() - 1] != quote {
         return None;
@@ -346,7 +354,10 @@ fn skip_whitespace_back(src: &[u8], end: Pos) -> Pos {
 
 fn skip_whitespace_forward(src: &[u8], start: Pos) -> Pos {
     let mut i = start;
-    while src.get(i).is_some_and(|byte| matches!(*byte, b' ' | b'\t' | b'\n' | b'\r')) {
+    while src
+        .get(i)
+        .is_some_and(|byte| matches!(*byte, b' ' | b'\t' | b'\n' | b'\r'))
+    {
         i += 1;
     }
     i

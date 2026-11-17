@@ -1,3 +1,4 @@
+pub mod accounting;
 mod garbage_collector;
 mod handle;
 mod heap;
@@ -6,7 +7,6 @@ mod heap_serializer;
 mod heap_trait_object;
 mod heap_visitor;
 mod pointer;
-pub mod accounting;
 mod sizing;
 pub(crate) mod verify;
 mod weak_rules;

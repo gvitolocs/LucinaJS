@@ -11,16 +11,16 @@
 //! When no host is installed none of this code runs and the runtime behaves exactly as upstream.
 
 pub mod api;
+#[cfg(test)]
+mod cell_tests;
 mod compiled;
-mod modules;
 mod host_object;
 mod host_space;
 mod jobs;
+mod modules;
 mod natives;
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod cell_tests;
 
 use std::{
     collections::HashMap,
@@ -32,54 +32,50 @@ use std::{
     },
 };
 
-use crate::{
-    runtime::{
-        Context, EvalResult, Handle, HeapPtr, PropertyKey, Realm, SymbolValue, Value,
-        abstract_operations::{call_object, construct as construct_object},
-        alloc_error::AllocResult,
-        bytecode::function::ClosureObject,
-        error::type_error,
-        eval_result::EvalError,
-        function::set_function_name,
-        gc::{AnyHeapItem, GarbageCollector, GcType, Heap, HeapInfo, HeapVisitor},
-        intrinsics::intrinsics::Intrinsic,
-        object_value::ObjectValue,
-        ordinary_object::{
-            ordinary_define_own_property, ordinary_delete, ordinary_get, ordinary_get_own_property,
-            ordinary_has_property, ordinary_own_property_keys, ordinary_set,
-        },
-        property_descriptor::PropertyDescriptor,
-        shape::Shape,
-        shape_registry::ShapeRegistry,
-        string_value::{FlatString, StringValue},
-        tasks::Task,
-        HeapItemKind,
-    },
-};
-
 pub use compiled::{
     CompileTimes, CompiledScript, OffThreadSyntaxError, ParsedScript, compile_parsed_script,
     compile_script, execute_compiled, last_compile_times, parse_script_off_thread,
 };
-pub use crate::runtime::bytecode::lazy::{LazyGenerateTime, lazy_generate_time};
 pub use host_object::HostObject;
-pub use crate::runtime::promise_object::{PromiseObject, PromiseRejectionOperation};
+pub use host_space::{HostFlags, HostHeader, HostHeaderPtr};
+pub(crate) use host_space::{HostRegionBases, HostSpace};
+pub(crate) use jobs::hand_tasks_to_host;
 pub use modules::{
     DynamicImport, ImportAttributes, ModuleRequestInfo, ModuleState, SourceTextModule,
     compile_module, finish_dynamic_import, module_evaluate, module_evaluation_error,
-    module_file_name, module_link, module_namespace, module_private, module_realm,
-    module_requests, module_state, requested_module, set_module_private, set_requested_module,
+    module_file_name, module_link, module_namespace, module_private, module_realm, module_requests,
+    module_state, requested_module, set_module_private, set_requested_module,
 };
-pub use host_space::{HostFlags, HostHeader, HostHeaderPtr};
+pub(crate) use natives::EmbedNatives;
 pub use natives::{
     NativeCall, function_reserved, function_reserved_opt, native_jit_info, native_of,
     new_native_function, new_native_function_with_jit_info, set_function_reserved,
     set_native_jit_info,
 };
 
-pub(crate) use host_space::{HostRegionBases, HostSpace};
-pub(crate) use jobs::hand_tasks_to_host;
-pub(crate) use natives::EmbedNatives;
+pub use crate::runtime::bytecode::lazy::{LazyGenerateTime, lazy_generate_time};
+pub use crate::runtime::promise_object::{PromiseObject, PromiseRejectionOperation};
+use crate::runtime::{
+    Context, EvalResult, Handle, HeapItemKind, HeapPtr, PropertyKey, Realm, SymbolValue, Value,
+    abstract_operations::{call_object, construct as construct_object},
+    alloc_error::AllocResult,
+    bytecode::function::ClosureObject,
+    error::type_error,
+    eval_result::EvalError,
+    function::set_function_name,
+    gc::{AnyHeapItem, GarbageCollector, GcType, Heap, HeapInfo, HeapVisitor},
+    intrinsics::intrinsics::Intrinsic,
+    object_value::ObjectValue,
+    ordinary_object::{
+        ordinary_define_own_property, ordinary_delete, ordinary_get, ordinary_get_own_property,
+        ordinary_has_property, ordinary_own_property_keys, ordinary_set,
+    },
+    property_descriptor::PropertyDescriptor,
+    shape::Shape,
+    shape_registry::ShapeRegistry,
+    string_value::{FlatString, StringValue},
+    tasks::Task,
+};
 
 /// Visitor for strong roots and traced fields. Every slot may be updated by a moving GC.
 pub trait RootVisitor {
@@ -204,7 +200,12 @@ pub trait Host: 'static {
 
     /// Call a native function created with `new_native_function`. The return value is read from
     /// `call.vp()[0]`. Throw by returning `Err` (see [`throw_value`]).
-    fn call_native(&self, cx: Context, native: *const c_void, call: &mut NativeCall) -> EvalResult<()> {
+    fn call_native(
+        &self,
+        cx: Context,
+        native: *const c_void,
+        call: &mut NativeCall,
+    ) -> EvalResult<()> {
         type_error(cx, "host does not implement natives")
     }
 
@@ -223,7 +224,12 @@ pub trait Host: 'static {
 
     /// Resolve hook (flags `HAS_RESOLVE`): called on an own property miss before the prototype
     /// walk. Return true if a property was defined, in which case the lookup is retried once.
-    fn resolve(&self, cx: Context, object: Handle<ObjectValue>, key: Handle<PropertyKey>) -> EvalResult<bool> {
+    fn resolve(
+        &self,
+        cx: Context,
+        object: Handle<ObjectValue>,
+        key: Handle<PropertyKey>,
+    ) -> EvalResult<bool> {
         Ok(false)
     }
 
@@ -339,7 +345,12 @@ pub trait Host: 'static {
     /// `instantiateStreaming`, SpiderMonkey's `ConsumeStreamCallback`): take over `response` (the
     /// value the promise resolved to) and feed its bytes to the engine's stream `stream_id` later.
     /// Return false (the default) to refuse: the engine then rejects the promise with a TypeError.
-    fn consume_stream(&self, cx: Context, response: Handle<Value>, stream_id: u32) -> EvalResult<bool> {
+    fn consume_stream(
+        &self,
+        cx: Context,
+        response: Handle<Value>,
+        stream_id: u32,
+    ) -> EvalResult<bool> {
         Ok(false)
     }
 
@@ -353,7 +364,8 @@ pub trait Host: 'static {
         object: Handle<ObjectValue>,
         key: Handle<PropertyKey>,
     ) -> EvalResult<Option<PropertyDescriptor>> {
-        Ok(ordinary_get_own_property(cx, object, key).map(|property| property.to_property_descriptor()))
+        Ok(ordinary_get_own_property(cx, object, key)
+            .map(|property| property.to_property_descriptor()))
     }
 
     fn proxy_define_property(
@@ -487,12 +499,24 @@ pub(crate) fn ensure_can_compile_strings(
     parameter_args: &[Handle<Value>],
     body_arg: Handle<Value>,
 ) -> EvalResult<()> {
-    if !has_host(cx) || host(cx).can_compile_strings(cx, kind, code, parameters, body, parameter_args, body_arg)? {
+    if !has_host(cx)
+        || host(cx).can_compile_strings(
+            cx,
+            kind,
+            code,
+            parameters,
+            body,
+            parameter_args,
+            body_arg,
+        )?
+    {
         return Ok(());
     }
 
     let message = match kind {
-        CompileStringsKind::Eval | CompileStringsKind::IndirectEval => "call to eval() blocked by CSP",
+        CompileStringsKind::Eval | CompileStringsKind::IndirectEval => {
+            "call to eval() blocked by CSP"
+        }
         CompileStringsKind::Function => "call to Function() blocked by CSP",
         CompileStringsKind::Wasm => "call to WebAssembly compilation blocked by CSP",
     };
@@ -622,7 +646,10 @@ pub(crate) fn try_state<'a>(mut cx: Context) -> Option<&'a mut EmbedState> {
 pub(crate) fn host<'a>(cx: Context) -> &'a dyn Host {
     // Only a shared borrow of the state, which ends here: the host is called while other code
     // re-borrows the state mutably.
-    let state = cx.embed.as_deref().expect("no host installed on this context");
+    let state = cx
+        .embed
+        .as_deref()
+        .expect("no host installed on this context");
     let host: *const dyn Host = &*state.host;
     // SAFETY: The host has its own boxed allocation, which lives until the state is dropped at the
     // end of `teardown`, after the last call into the host, and is never written or moved while it
@@ -972,24 +999,38 @@ pub(crate) fn engine_cell_hooks(object: HeapPtr<ObjectValue>) -> Option<&'static
         return None;
     }
 
-    state(context_of(object.as_ptr().cast())).cell_hooks.get(&(object.as_ptr() as usize)).copied()
+    state(context_of(object.as_ptr().cast()))
+        .cell_hooks
+        .get(&(object.as_ptr() as usize))
+        .copied()
 }
 
 /// Read a reserved slot of an engine cell. Panics if not a cell or out of range.
 #[allow(dead_code)] // used by the WebAssembly scaffold (slice W0a)
 pub(crate) fn engine_cell_slot(cell: HeapPtr<ObjectValue>, index: u32) -> Value {
-    cell_header(cell).expect("not an engine cell").reserved_slot(index)
+    cell_header(cell)
+        .expect("not an engine cell")
+        .reserved_slot(index)
 }
 
 /// Write a reserved slot of an engine cell. Panics if not a cell or out of range.
 #[allow(dead_code)] // used by the WebAssembly scaffold (slice W0a)
 pub(crate) fn set_engine_cell_slot(cell: HeapPtr<ObjectValue>, index: u32, value: Value) {
-    cell_header(cell).expect("not an engine cell").set_reserved_slot(index, value);
+    cell_header(cell)
+        .expect("not an engine cell")
+        .set_reserved_slot(index, value);
 }
 
 /// Run the trace hook of an engine cell the GC marked (a no-op for a cell without a trace hook).
-pub(crate) fn trace_engine_cell(cx: Context, object: HeapPtr<AnyHeapItem>, gc: &mut GarbageCollector) {
-    let hooks = state(cx).cell_hooks.get(&(object.as_ptr() as usize)).copied();
+pub(crate) fn trace_engine_cell(
+    cx: Context,
+    object: HeapPtr<AnyHeapItem>,
+    gc: &mut GarbageCollector,
+) {
+    let hooks = state(cx)
+        .cell_hooks
+        .get(&(object.as_ptr() as usize))
+        .copied();
     // A marked cell is live, and only `finalize_engine_cell` (on a dead cell) removes its entry
     debug_assert!(hooks.is_some(), "live engine cell has no hook table entry");
     if let Some(trace) = hooks.and_then(|hooks| hooks.trace) {
@@ -1025,7 +1066,10 @@ pub(crate) fn pop_cell_call_root(cx: Context, depth: usize, cell: HeapPtr<Object
     let roots = &mut state(cx).cell_call_roots;
     let matches = roots.len() == depth + 1 && roots[depth].ptr_eq(&cell);
     if !matches {
-        eprintln!("brimstone: engine cell call roots out of order (depth {depth} of {})", roots.len());
+        eprintln!(
+            "brimstone: engine cell call roots out of order (depth {depth} of {})",
+            roots.len()
+        );
         std::process::abort();
     }
     roots.pop();
@@ -1039,8 +1083,14 @@ pub(crate) fn cell_call_root_count(cx: Context) -> usize {
 
 /// Record the free callback of an external buffer's memory, owned by `cell`: the cell's finalizer
 /// runs it.
-pub(crate) fn register_external_free(cx: Context, cell: HeapPtr<ObjectValue>, free: Box<dyn FnOnce()>) {
-    state(cx).external_frees.insert(cell.as_ptr() as usize, free);
+pub(crate) fn register_external_free(
+    cx: Context,
+    cell: HeapPtr<ObjectValue>,
+    free: Box<dyn FnOnce()>,
+) {
+    state(cx)
+        .external_frees
+        .insert(cell.as_ptr() as usize, free);
 }
 
 /// Drop the free callback registered for `cell` without calling it (the buffer was not created).
@@ -1204,7 +1254,11 @@ pub fn realm_of_object(cx: Context, object: HeapPtr<ObjectValue>) -> HeapPtr<Rea
 /// if the object is not a job. The same realm is reported as the job's `incumbent_global`'s realm.
 pub fn job_realm(job: HeapPtr<ObjectValue>) -> Option<HeapPtr<Realm>> {
     let header = host_header(job)?;
-    if header.flags().contains(HostFlags::INTERNAL_JOB) { Some(header.realm()) } else { None }
+    if header.flags().contains(HostFlags::INTERNAL_JOB) {
+        Some(header.realm())
+    } else {
+        None
+    }
 }
 
 /// The global object of a realm.
@@ -1273,7 +1327,8 @@ pub fn set_native_stack_quota(mut cx: Context, bytes: usize) {
 
     let marker = 0u8;
     let stack_pointer = std::hint::black_box(&marker) as *const u8 as usize;
-    cx.vm().set_native_stack_limit(stack_pointer.saturating_sub(bytes).max(1));
+    cx.vm()
+        .set_native_stack_limit(stack_pointer.saturating_sub(bytes).max(1));
 }
 
 /// The lowest native stack address the VM may be re-entered at, or 0 if no quota is set.
@@ -1306,7 +1361,8 @@ pub fn error_stack_frames(
     error: Handle<ObjectValue>,
     max_frames: usize,
 ) -> AllocResult<Option<Vec<CapturedStackFrame>>> {
-    let Some(error) = error.as_opt::<crate::runtime::intrinsics::error_object::ErrorObject>() else {
+    let Some(error) = error.as_opt::<crate::runtime::intrinsics::error_object::ErrorObject>()
+    else {
         return Ok(None);
     };
     let Some(stack_frame_info) = error.stack_frame_info() else {
@@ -1355,12 +1411,11 @@ pub struct HeapStats {
 pub fn heap_stats(cx: Context) -> HeapStats {
     let bounds = cx.heap.current_heap_bounds();
     let gc_stats = cx.heap.gc_stats();
-    let (host_space_used_bytes, host_space_reserved_bytes, host_object_count) = match try_state(cx) {
-        Some(state) => (
-            state.space.used_bytes(),
-            state.space.region_bytes(),
-            state.space.num_objects(),
-        ),
+    let (host_space_used_bytes, host_space_reserved_bytes, host_object_count) = match try_state(cx)
+    {
+        Some(state) => {
+            (state.space.used_bytes(), state.space.region_bytes(), state.space.num_objects())
+        }
         None => (0, 0, 0),
     };
 
@@ -1623,7 +1678,11 @@ pub(crate) fn visit_roots_for_gc(cx: Context, gc: &mut GarbageCollector) {
 }
 
 /// Report the fields of a marked host object through the host's trace hook.
-pub(crate) fn trace_host_object(cx: Context, object: HeapPtr<AnyHeapItem>, gc: &mut GarbageCollector) {
+pub(crate) fn trace_host_object(
+    cx: Context,
+    object: HeapPtr<AnyHeapItem>,
+    gc: &mut GarbageCollector,
+) {
     debug_assert!(!is_engine_cell(object.cast()), "engine cells are traced by trace_engine_cell");
     // SAFETY: The GC only traces objects from its host gray stack, which are host space objects.
     let object = unsafe { HostObjectRef::from_host_space_object(object) };
@@ -1704,7 +1763,9 @@ pub(crate) fn teardown(mut cx: Context) {
         };
         if flags.contains(HostFlags::INTERNAL_CELL) {
             finalize_engine_cell(cx, object);
-        } else if flags.contains(HostFlags::HAS_FINALIZE) && !flags.contains(HostFlags::INTERNAL_JOB) {
+        } else if flags.contains(HostFlags::HAS_FINALIZE)
+            && !flags.contains(HostFlags::INTERNAL_JOB)
+        {
             // SAFETY: The object is a host space object; the space is dropped with the state below.
             let object = unsafe { HostObjectRef::from_host_space_object(object) };
             host(cx).finalize_host_object(cx, object);
@@ -1805,7 +1866,9 @@ pub(crate) fn call_resolve_hook(
     let is_resolving = state(cx)
         .resolving
         .iter()
-        .any(|(resolving_address, resolving_key)| *resolving_address == address && **resolving_key == *key);
+        .any(|(resolving_address, resolving_key)| {
+            *resolving_address == address && **resolving_key == *key
+        });
     if is_resolving {
         return Ok(false);
     }
@@ -1919,10 +1982,17 @@ pub(crate) fn host_space_contains(cx: Context, ptr: usize) -> bool {
 }
 
 /// Heap verification: a host object's fields through the host's trace hook.
-pub(crate) fn trace_host_object_for_verify(cx: Context, object: HeapPtr<AnyHeapItem>, visitor: &mut impl HeapVisitor) {
+pub(crate) fn trace_host_object_for_verify(
+    cx: Context,
+    object: HeapPtr<AnyHeapItem>,
+    visitor: &mut impl HeapVisitor,
+) {
     // An engine cell (it has HAS_TRACE when it has a trace hook): its own hook, not the host's
     if is_engine_cell(object.cast()) {
-        let hooks = state(cx).cell_hooks.get(&(object.as_ptr() as usize)).copied();
+        let hooks = state(cx)
+            .cell_hooks
+            .get(&(object.as_ptr() as usize))
+            .copied();
         // The verifier walks only objects not yet freed, and an entry is removed only when the
         // cell is finalized, right before it is freed
         debug_assert!(hooks.is_some(), "live engine cell has no hook table entry");
@@ -2013,19 +2083,31 @@ pub fn set_gc_parameter(mut cx: Context, param: GcParam, value: u32) -> bool {
     let tenths = |v: u32| Some(v as usize / 10).filter(|f| (10..=MAX_TENTHS).contains(f));
     let ok = match param {
         GcParam::MaxBytes => {
-            t.max_bytes = if value == u32::MAX { usize::MAX } else { value as usize };
+            t.max_bytes = if value == u32::MAX {
+                usize::MAX
+            } else {
+                value as usize
+            };
             true
         }
         GcParam::MallocThresholdBaseMb => mb(value).map(|b| t.malloc_base = b).is_some(),
         GcParam::AllocationThresholdMb => mb(value).map(|b| t.allocation_threshold = b).is_some(),
-        GcParam::SmallHeapSizeMaxMb => mb(value).filter(|b| *b < t.large_heap).map(|b| t.small_heap = b).is_some(),
-        GcParam::LargeHeapSizeMinMb => mb(value).filter(|b| *b > t.small_heap).map(|b| t.large_heap = b).is_some(),
-        GcParam::HighFrequencySmallHeapGrowth => {
-            tenths(value).filter(|f| *f >= t.high_large_tenths).map(|f| t.high_small_tenths = f).is_some()
-        }
-        GcParam::HighFrequencyLargeHeapGrowth => {
-            tenths(value).filter(|f| *f <= t.high_small_tenths).map(|f| t.high_large_tenths = f).is_some()
-        }
+        GcParam::SmallHeapSizeMaxMb => mb(value)
+            .filter(|b| *b < t.large_heap)
+            .map(|b| t.small_heap = b)
+            .is_some(),
+        GcParam::LargeHeapSizeMinMb => mb(value)
+            .filter(|b| *b > t.small_heap)
+            .map(|b| t.large_heap = b)
+            .is_some(),
+        GcParam::HighFrequencySmallHeapGrowth => tenths(value)
+            .filter(|f| *f >= t.high_large_tenths)
+            .map(|f| t.high_small_tenths = f)
+            .is_some(),
+        GcParam::HighFrequencyLargeHeapGrowth => tenths(value)
+            .filter(|f| *f <= t.high_small_tenths)
+            .map(|f| t.high_large_tenths = f)
+            .is_some(),
         GcParam::LowFrequencyHeapGrowth => tenths(value).map(|f| t.low_tenths = f).is_some(),
         GcParam::HighFrequencyTimeLimitMs => {
             t.high_frequency_ms = value as u64;

@@ -21,17 +21,6 @@
 //! column for is a code the [[Fields]] has no field for, and the answer is then 12.3.3 steps 7 and 8,
 //! the code or `undefined` - never a name this build made up.
 
-use crate::extend_object;
-use crate::runtime::{
-    Context, Handle, Value,
-    error::{range_error, type_error},
-    eval_result::EvalResult,
-    gc::{HeapPtr, HeapVisitor},
-    intrinsics::intrinsics::Intrinsic,
-    object_value::ObjectValue,
-    ordinary_object::ObjectBuilder,
-};
-
 use brimstone_intl_data::IntlDataProvider;
 use icu_experimental::dimension::provider::currency::extended::CurrencyExtendedDataV1;
 use icu_experimental::displaynames::multi::{
@@ -50,8 +39,20 @@ use super::locale_negotiation::{
     script_subtag, type_value, variant_subtag,
 };
 use super::number_format_currency::{load_optional, marker_attributes};
-use super::options::{get_enum_option, get_name_option, get_options_object, get_required_name_option};
+use super::options::{
+    get_enum_option, get_name_option, get_options_object, get_required_name_option,
+};
 use super::plural_rules_object::{PluralRuleType, PluralRulesSettings};
+use crate::extend_object;
+use crate::runtime::{
+    Context, Handle, Value,
+    error::{range_error, type_error},
+    eval_result::EvalResult,
+    gc::{HeapPtr, HeapVisitor},
+    intrinsics::intrinsics::Intrinsic,
+    object_value::ObjectValue,
+    ordinary_object::ObjectBuilder,
+};
 
 /// [[Type]] (https://tc39.es/ecma402/#sec-Intl.DisplayNames), 12.1.1 step 9: which of the six sets of
 /// names 12.3.3 reads, and which production 12.5.1 checks a code against.
@@ -271,13 +272,11 @@ impl DisplayNamesTables {
     /// locale was resolved out of `BUILT_IN_LOCALES`, whose every entry has all three tables, and the
     /// style is one of the three 12.1.1 step 6 allows - so callers turn it into the RangeError that
     /// names the build rather than the program as the cause.
-    pub(crate) fn build(
-        locale: DataLocale,
-        style: DisplayNamesStyle,
-    ) -> Result<Self, DataError> {
-        let icu_locale = locale.tag().parse::<IcuLocale>().map_err(|_| {
-            DataError::custom("a built-in locale tag that does not parse")
-        })?;
+    pub(crate) fn build(locale: DataLocale, style: DisplayNamesStyle) -> Result<Self, DataError> {
+        let icu_locale = locale
+            .tag()
+            .parse::<IcuLocale>()
+            .map_err(|_| DataError::custom("a built-in locale tag that does not parse"))?;
 
         let preferences = DisplayNamesPreferences::from(&icu_locale);
 
@@ -295,16 +294,8 @@ impl DisplayNamesTables {
                 preferences,
                 options,
             )?,
-            region: RegionDisplayNames::try_new_unstable(
-                &IntlDataProvider,
-                preferences,
-                options,
-            )?,
-            script: ScriptDisplayNames::try_new_unstable(
-                &IntlDataProvider,
-                preferences,
-                options,
-            )?,
+            region: RegionDisplayNames::try_new_unstable(&IntlDataProvider, preferences, options)?,
+            script: ScriptDisplayNames::try_new_unstable(&IntlDataProvider, preferences, options)?,
         })
     }
 
@@ -334,18 +325,12 @@ impl DisplayNamesSettings {
     /// and style, read by type. Currency goes its own way because its name is not in a display-names
     /// marker but in the currency data of 16.1.3; the two types with no table at all answer `None`,
     /// which is 12.3.3 step 6 finding no field.
-    pub(crate) fn display_name(
-        self,
-        cx: Context,
-        code: &str,
-    ) -> Result<Option<String>, DataError> {
+    pub(crate) fn display_name(self, cx: Context, code: &str) -> Result<Option<String>, DataError> {
         if self.ty == DisplayNamesType::Currency {
             return currency_name(cx, self.locale, code);
         }
 
-        let tables = cx
-            .locale_cache()
-            .display_names(self.locale, self.style)?;
+        let tables = cx.locale_cache().display_names(self.locale, self.style)?;
 
         Ok(tables.name_of(self.ty, code).map(str::to_owned))
     }
@@ -373,10 +358,7 @@ fn currency_name(cx: Context, locale: DataLocale, code: &str) -> Result<Option<S
 
     let rules = cx
         .locale_cache()
-        .plural_rules(PluralRulesSettings {
-            locale,
-            kind: PluralRuleType::Cardinal,
-        });
+        .plural_rules(PluralRulesSettings { locale, kind: PluralRuleType::Cardinal });
 
     // The operands of `1`, which is the category the name of the currency alone is stored under: the
     // `PluralOperands` of a bare integer has no visible fraction digits, which is what "one US
@@ -455,11 +437,7 @@ pub(crate) fn canonical_code_for_display_names(
 
             let (first, rest) = code.split_at(1);
 
-            Ok(format!(
-                "{}{}",
-                first.to_ascii_uppercase(),
-                rest.to_ascii_lowercase()
-            ))
+            Ok(format!("{}{}", first.to_ascii_uppercase(), rest.to_ascii_lowercase()))
         }
 
         // Steps 4.1 to 4.3. `type_value` is the `type` production of 6.4.3, and it allows the
@@ -590,10 +568,7 @@ impl DisplayNamesObject {
 
         match this_value.as_object().as_opt::<Self>() {
             Some(instance) if instance.resolved.is_some() => Ok(instance),
-            _ => type_error(
-                cx,
-                "Intl.DisplayNames method called on an uninitialized instance",
-            ),
+            _ => type_error(cx, "Intl.DisplayNames method called on an uninitialized instance"),
         }
     }
 
@@ -763,10 +738,7 @@ mod tests {
     fn a_language_code_is_a_language_id_canonicalized() {
         // Step 1.3, which is the whole of 6.2.2: the script and region of a dialect tag are recased
         // and reordered, and a code that is only a language is lowercased.
-        assert_eq!(
-            canonical(DisplayNamesType::Language, "en-gb").as_deref(),
-            Some("en-GB")
-        );
+        assert_eq!(canonical(DisplayNamesType::Language, "en-gb").as_deref(), Some("en-GB"));
 
         // The pieces of a `unicode_language_id` are in the production's order, and a tag that spells
         // them in another order is refused rather than rewritten: the canonicalization of 6.2.2
@@ -777,10 +749,7 @@ mod tests {
             canonical(DisplayNamesType::Language, "sr-Cyrl-RS").as_deref(),
             Some("sr-Cyrl-RS")
         );
-        assert_eq!(
-            canonical(DisplayNamesType::Language, "DK").as_deref(),
-            Some("dk")
-        );
+        assert_eq!(canonical(DisplayNamesType::Language, "DK").as_deref(), Some("dk"));
 
         // Steps 1.1 and 1.2: what 6.2.1 refuses is refused, and what only `unicode_locale_id` matches
         // is refused by step 1.1 - an extension sequence, a transform and a private-use subtag are
@@ -795,14 +764,8 @@ mod tests {
     #[test]
     fn a_region_code_is_upper_and_a_script_code_is_title_case() {
         // Steps 2.1 and 2.2.
-        assert_eq!(
-            canonical(DisplayNamesType::Region, "dk").as_deref(),
-            Some("DK")
-        );
-        assert_eq!(
-            canonical(DisplayNamesType::Region, "419").as_deref(),
-            Some("419")
-        );
+        assert_eq!(canonical(DisplayNamesType::Region, "dk").as_deref(), Some("DK"));
+        assert_eq!(canonical(DisplayNamesType::Region, "419").as_deref(), Some("419"));
 
         // Step 2.1 refuses what `unicode_region_subtag` refuses: three letters is a currency, two
         // digits is nothing, and the empty string is refused rather than uppercased into an answer.
@@ -811,14 +774,8 @@ mod tests {
         assert_eq!(canonical(DisplayNamesType::Region, ""), None);
 
         // Steps 3.3 to 3.5, the one case rule of clause 12 that touches a single letter.
-        assert_eq!(
-            canonical(DisplayNamesType::Script, "latn").as_deref(),
-            Some("Latn")
-        );
-        assert_eq!(
-            canonical(DisplayNamesType::Script, "CYRL").as_deref(),
-            Some("Cyrl")
-        );
+        assert_eq!(canonical(DisplayNamesType::Script, "latn").as_deref(), Some("Latn"));
+        assert_eq!(canonical(DisplayNamesType::Script, "CYRL").as_deref(), Some("Cyrl"));
 
         // Step 3.1: neither five letters nor three is a `unicode_script_subtag`.
         assert_eq!(canonical(DisplayNamesType::Script, "cyrl1"), None);
@@ -828,14 +785,8 @@ mod tests {
     #[test]
     fn a_calendar_code_is_lower_and_its_backwards_forms_are_refused() {
         // Steps 4.2 and 4.3: the ASCII-lowercase of a `type` value.
-        assert_eq!(
-            canonical(DisplayNamesType::Calendar, "GREGORY").as_deref(),
-            Some("gregory")
-        );
-        assert_eq!(
-            canonical(DisplayNamesType::Calendar, "chinese").as_deref(),
-            Some("chinese")
-        );
+        assert_eq!(canonical(DisplayNamesType::Calendar, "GREGORY").as_deref(), Some("gregory"));
+        assert_eq!(canonical(DisplayNamesType::Calendar, "chinese").as_deref(), Some("chinese"));
 
         // Step 4.1: 3 to 8 alphanumeric characters, so two letters, nine letters and the empty
         // string all throw.
@@ -845,16 +796,10 @@ mod tests {
 
         // A `type` value the calendar registry does not know is still a `type` value, which is all
         // step 4 asks. The name is the lookup's to refuse, not this operation's.
-        assert_eq!(
-            canonical(DisplayNamesType::Calendar, "gregoryx").as_deref(),
-            Some("gregoryx")
-        );
+        assert_eq!(canonical(DisplayNamesType::Calendar, "gregoryx").as_deref(), Some("gregoryx"));
 
         // Step 4.2's backwards compatibility syntax, which UTS 35 3.3.2 spells with an underscore.
-        assert_eq!(
-            canonical(DisplayNamesType::Calendar, "islamic_civility"),
-            None
-        );
+        assert_eq!(canonical(DisplayNamesType::Calendar, "islamic_civility"), None);
     }
 
     #[test]
@@ -879,14 +824,8 @@ mod tests {
     #[test]
     fn a_currency_code_is_three_letters_upper() {
         // Steps 7 and 8: 8.3.1's three ASCII letters and the ASCII-uppercase of them.
-        assert_eq!(
-            canonical(DisplayNamesType::Currency, "usd").as_deref(),
-            Some("USD")
-        );
-        assert_eq!(
-            canonical(DisplayNamesType::Currency, "DKK").as_deref(),
-            Some("DKK")
-        );
+        assert_eq!(canonical(DisplayNamesType::Currency, "usd").as_deref(), Some("USD"));
+        assert_eq!(canonical(DisplayNamesType::Currency, "DKK").as_deref(), Some("DKK"));
 
         // Step 7: a digit, two letters, four letters and the empty string are all refused.
         assert_eq!(canonical(DisplayNamesType::Currency, "us1"), None);

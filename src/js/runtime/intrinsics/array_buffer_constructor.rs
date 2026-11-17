@@ -10,7 +10,8 @@ use crate::{
         intrinsics::{
             array_buffer_object::{ArrayBufferObject, DetachKey},
             data_view_object::DataViewObject,
-            intrinsics::Intrinsic, rust_runtime::RuntimeFunction,
+            intrinsics::Intrinsic,
+            rust_runtime::RuntimeFunction,
         },
         object_value::ObjectValue,
         realm::Realm,

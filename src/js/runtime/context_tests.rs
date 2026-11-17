@@ -1,9 +1,7 @@
 //! Tests for the context's mocked clock (see `Context::current_unix_time_nanos`).
 
 use crate::runtime::{
-    Context, ContextBuilder, Handle, Realm,
-    context::MOCKED_UNIX_TIME_STEP_NANOS,
-    embed,
+    Context, ContextBuilder, Handle, Realm, context::MOCKED_UNIX_TIME_STEP_NANOS, embed,
 };
 
 /// The unix time that the mocked clocks of these tests start at, in nanoseconds.
@@ -23,7 +21,10 @@ fn eval_number(cx: Context, realm: Handle<Realm>, source: &str) -> f64 {
 /// Read the mocked clock of a fresh context `reads` times, nanoseconds and milliseconds in turn.
 /// Both accessors read the same clock, so each call is one step further than the last.
 fn clock_reads(base: u128, reads: u128) -> Vec<(u128, u128)> {
-    let cx = ContextBuilder::new().mock_unix_time_nanos(base).build().unwrap();
+    let cx = ContextBuilder::new()
+        .mock_unix_time_nanos(base)
+        .build()
+        .unwrap();
 
     let times = (0..reads)
         .map(|_| (cx.current_unix_time_nanos(), cx.current_unix_time_millis()))
@@ -63,7 +64,10 @@ fn mocked_clock_is_the_same_in_every_context() {
 /// finishes after a fixed number of reads, whatever the machine it runs on.
 #[test]
 fn js_busy_wait_on_the_clock_terminates() {
-    let cx = ContextBuilder::new().mock_unix_time_nanos(BASE_NANOS).build().unwrap();
+    let cx = ContextBuilder::new()
+        .mock_unix_time_nanos(BASE_NANOS)
+        .build()
+        .unwrap();
     let realm = cx.initial_realm();
 
     // Every read of `Date.now()` is a millisecond later than the last.

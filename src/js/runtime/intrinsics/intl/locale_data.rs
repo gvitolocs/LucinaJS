@@ -97,9 +97,7 @@ pub(crate) fn calendars_of_locale(tag: &str) -> Vec<String> {
         let canonical = canonical_u_value("ca", identifier);
 
         // Step 9.2.
-        if available_calendars().contains(&canonical.as_str())
-            && !list.contains(&canonical)
-        {
+        if available_calendars().contains(&canonical.as_str()) && !list.contains(&canonical) {
             list.push(canonical);
         }
     }
@@ -430,14 +428,8 @@ mod tests {
         assert_eq!(time_zones_of_locale("da"), TimeZones::NoRegion);
         assert_eq!(time_zones_of_locale("it"), TimeZones::NoRegion);
 
-        assert_eq!(
-            time_zones_of_locale("da-DK"),
-            TimeZones::Known(&["Europe/Copenhagen"])
-        );
-        assert_eq!(
-            time_zones_of_locale("it-IT"),
-            TimeZones::Known(&["Europe/Rome"])
-        );
+        assert_eq!(time_zones_of_locale("da-DK"), TimeZones::Known(&["Europe/Copenhagen"]));
+        assert_eq!(time_zones_of_locale("it-IT"), TimeZones::Known(&["Europe/Rome"]));
 
         // The 29 zones of `US`, in the order step 3 sorts them.
         let TimeZones::Known(zones) = time_zones_of_locale("en-US") else {

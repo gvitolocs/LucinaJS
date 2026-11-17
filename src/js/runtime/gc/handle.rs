@@ -187,7 +187,11 @@ pub(crate) mod leak_trace {
             let s = s.borrow();
             let mut v: Vec<_> = s.iter().collect();
             v.sort_by(|a, b| b.1.cmp(a.1));
-            v.iter().take(10).map(|(k, n)| format!("  {n:>8} {k}")).collect::<Vec<_>>().join("\n")
+            v.iter()
+                .take(10)
+                .map(|(k, n)| format!("  {n:>8} {k}"))
+                .collect::<Vec<_>>()
+                .join("\n")
         })
     }
 }
@@ -198,7 +202,10 @@ impl Drop for HandleScope {
         if !self.exited.get() {
             self.exited.set(true);
             leak_trace::DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
-            leak_trace::record(format!("scope dropped without exit, entered at {}", self.caller), 1);
+            leak_trace::record(
+                format!("scope dropped without exit, entered at {}", self.caller),
+                1,
+            );
         }
     }
 }
@@ -493,12 +500,13 @@ impl HandleContext {
     /// Number of handles in use (every block of the scope stack), for the GC log. A count that
     /// keeps growing across collections means a handle scope that never exits.
     pub fn live_handles(&self) -> usize {
-        let mut count =
-            (self.next_ptr as usize - self.current_block.start_ptr as usize) / size_of::<HandleContents>();
+        let mut count = (self.next_ptr as usize - self.current_block.start_ptr as usize)
+            / size_of::<HandleContents>();
         let mut block = &self.current_block;
         while let Some(prev) = &block.prev_block {
             block = prev;
-            count += (block.end_ptr as usize - block.start_ptr as usize) / size_of::<HandleContents>();
+            count +=
+                (block.end_ptr as usize - block.start_ptr as usize) / size_of::<HandleContents>();
         }
         count
     }

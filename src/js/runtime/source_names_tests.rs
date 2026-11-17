@@ -46,7 +46,10 @@ fn a_member_chain_is_written_in_full() {
     // `obj.name(...)`: the call reports the property name it looked up.
     assert_eq!(callee_at("a.b.|c(1)"), Some("a.b.c".to_owned()));
     assert_eq!(callee_at("a.|b()"), Some("a.b".to_owned()));
-    assert_eq!(callee_at("window.|sc_initFeedback()"), Some("window.sc_initFeedback".to_owned()));
+    assert_eq!(
+        callee_at("window.|sc_initFeedback()"),
+        Some("window.sc_initFeedback".to_owned())
+    );
     assert_eq!(callee_at("this.|foo()"), Some("this.foo".to_owned()));
 }
 
@@ -76,7 +79,10 @@ fn a_call_in_the_chain_keeps_the_name_and_drops_the_arguments() {
 fn a_receiver_that_is_not_a_name_becomes_the_intermediate_value() {
     assert_eq!(callee_at("(x + y).|z()"), Some("(intermediate value).z".to_owned()));
     assert_eq!(callee_at("(x + y)|()"), Some("(intermediate value)".to_owned()));
-    assert_eq!(callee_at("(function () {})()|(1)"), Some("(intermediate value)(...)".to_owned()));
+    assert_eq!(
+        callee_at("(function () {})()|(1)"),
+        Some("(intermediate value)(...)".to_owned())
+    );
     assert_eq!(callee_at("`${a}`.|x()"), Some("(intermediate value).x".to_owned()));
     assert_eq!(callee_at("({}).|x()"), Some("(intermediate value).x".to_owned()));
 }

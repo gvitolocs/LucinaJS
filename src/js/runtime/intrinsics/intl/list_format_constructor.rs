@@ -8,6 +8,10 @@
 //! DateTimeFormat, DisplayNames, DurationFormat, ListFormat, Locale, NumberFormat, PluralRules,
 //! RelativeTimeFormat, Segmenter - and the fifth to exist in this build.
 
+use super::intl_object::canonicalize_locale_list_argument;
+use super::list_format_object::ListFormatObject;
+use super::locale_negotiation::{Matcher, supported_locales_of};
+use super::options::{coerce_options_to_object, get_name_option};
 use crate::runtime::{
     Context, Handle, Realm,
     alloc_error::AllocResult,
@@ -18,11 +22,6 @@ use crate::runtime::{
     object_value::ObjectValue,
 };
 use crate::{intrinsic_methods, runtime_fn};
-
-use super::intl_object::canonicalize_locale_list_argument;
-use super::list_format_object::ListFormatObject;
-use super::locale_negotiation::{Matcher, supported_locales_of};
-use super::options::{coerce_options_to_object, get_name_option};
 
 /// %Intl.ListFormat% (https://tc39.es/ecma402/#sec-intl-listformat-constructor), 14.1.
 pub struct ListFormatConstructor;
@@ -69,12 +68,7 @@ impl ListFormatConstructor {
         // Steps 3 to 13: ResolveOptions (9.2.8) and the reading of every option. The handle above is
         // what keeps those steps' allocations from moving the block out from under the pointer that
         // goes back to the caller.
-        ListFormatObject::initialize(
-            list_format,
-            cx,
-            arguments.get(cx, 0),
-            arguments.get(cx, 1),
-        )?;
+        ListFormatObject::initialize(list_format, cx, arguments.get(cx, 0), arguments.get(cx, 1))?;
 
         // Step 14.
         Ok(list_format.into())
@@ -104,7 +98,11 @@ impl ListFormatConstructor {
 
         let supported = supported_locales_of(
             &requested_locales,
-            if matcher == "lookup" { Matcher::Lookup } else { Matcher::BestFit },
+            if matcher == "lookup" {
+                Matcher::Lookup
+            } else {
+                Matcher::BestFit
+            },
         );
 
         // 9.2.9 step 5: CreateArrayFromList, in the order the caller asked and with the tags as the

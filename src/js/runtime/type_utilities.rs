@@ -14,6 +14,7 @@ use crate::{
         alloc_error::AllocResult,
         array_object::ArrayObject,
         bytecode::function::ClosureObject,
+        embed::HostObject,
         error::{range_error, syntax_error, type_error},
         eval_result::EvalResult,
         gc::{Handle, HeapPtr},
@@ -23,7 +24,6 @@ use crate::{
         },
         object_value::ObjectValue,
         property_key::PropertyKey,
-        embed::HostObject,
         proxy_object::ProxyObject,
         realm::Realm,
         string_object::StringObject,
@@ -481,10 +481,7 @@ fn to_object_for_property_access(
         Err(_) => "unknown".to_owned(),
     };
 
-    type_error(
-        cx,
-        &format!("Cannot {verb} properties of {base_name} ({gerund} '{key_name}')"),
-    )
+    type_error(cx, &format!("Cannot {verb} properties of {base_name} ({gerund} '{key_name}')"))
 }
 
 /// ToObject for a property read, naming the property read from a nullish base.

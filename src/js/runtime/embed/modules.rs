@@ -9,6 +9,10 @@
 
 use std::rc::Rc;
 
+pub use crate::runtime::module::{
+    import_attributes::ImportAttributes,
+    source_text_module::{ModuleState, SourceTextModule},
+};
 use crate::{
     common::wtf_8::Wtf8String,
     eval_err,
@@ -25,11 +29,6 @@ use crate::{
         promise_object::{PromiseCapability, PromiseObject},
         string_value::FlatString,
     },
-};
-
-pub use crate::runtime::module::{
-    import_attributes::ImportAttributes,
-    source_text_module::{ModuleState, SourceTextModule},
 };
 
 /// A requested module of a module: its specifier and import attributes, in source order.
@@ -57,11 +56,11 @@ pub fn compile_module(
             Err(error) => return syntax_parse_error(cx, &error),
         };
 
-        let program = match ParsedProgram::parse(source, cx.options.clone(), /* is_module */ true)
-        {
-            Ok(program) => Rc::new(program),
-            Err(error) => return syntax_parse_error(cx, &error),
-        };
+        let program =
+            match ParsedProgram::parse(source, cx.options.clone(), /* is_module */ true) {
+                Ok(program) => Rc::new(program),
+                Err(error) => return syntax_parse_error(cx, &error),
+            };
 
         match BytecodeProgramGenerator::generate_from_parsed_module(cx, &program, realm) {
             Ok(module) => Ok(module),

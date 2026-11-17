@@ -20,11 +20,11 @@ use crate::{
         get,
         intrinsic_builder::IntrinsicBuilder,
         intrinsics::{
-            intrinsics::Intrinsic,
             intl::{
                 collator_object::{CollatorSettings, compare_strings},
                 collator_options::resolve_collator,
             },
+            intrinsics::Intrinsic,
             regexp_constructor::{FlagsSource, RegExpSource, regexp_create},
             regexp_prototype::GenericFlags,
             rust_runtime::RuntimeFunction,

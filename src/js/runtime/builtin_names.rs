@@ -637,7 +637,6 @@ builtin_names!(
     (year, "year"),
     (year_of_week, "yearOfWeek"),
     (years, "years"),
-
     // The property names of the Intl services (ECMA-402 8-10), appended at the end of the list so
     // that each piece of Intl adds its own lines here. The names two services share - "locale",
     // "localeMatcher", "resolvedOptions", "supportedLocalesOf" and "hourCycle" - are in the

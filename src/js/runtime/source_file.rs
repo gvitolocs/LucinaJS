@@ -25,14 +25,18 @@ pub struct SourceTexts {
 impl SourceTexts {
     /// Update the source files after a GC moved the heap, dropping the texts of collected files.
     /// `resolve` returns the new location of a live item, or None if it was collected.
-    pub fn sweep(&mut self, resolve: impl Fn(HeapPtr<AnyHeapItem>) -> Option<HeapPtr<AnyHeapItem>>) {
-        self.entries.retain_mut(|(file, _)| match resolve(file.cast()) {
-            Some(new_location) => {
-                *file = new_location.cast();
-                true
-            }
-            None => false,
-        });
+    pub fn sweep(
+        &mut self,
+        resolve: impl Fn(HeapPtr<AnyHeapItem>) -> Option<HeapPtr<AnyHeapItem>>,
+    ) {
+        self.entries
+            .retain_mut(|(file, _)| match resolve(file.cast()) {
+                Some(new_location) => {
+                    *file = new_location.cast();
+                    true
+                }
+                None => false,
+            });
     }
 
     /// Number of source files whose text is kept.

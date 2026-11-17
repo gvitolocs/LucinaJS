@@ -6,20 +6,14 @@
 //! The instance, the reading of its options and the formatting itself are
 //! [`super::list_format_object`]; this file is only the methods a program calls.
 
-use crate::runtime::{
-    Context, Handle, Realm,
-    alloc_error::AllocResult,
-    array_object::create_array_from_list,
-    error::type_error,
-    intrinsic_builder::IntrinsicBuilder,
-    intrinsics::intrinsics::Intrinsic,
-    object_value::ObjectValue,
-    ordinary_object::ordinary_object_create,
-};
-use crate::{intrinsic_methods, runtime_fn};
-
 use super::list_format_object::{ListFormatObject, part_object};
 use super::number_format_prototype::{report_str, report_value};
+use crate::runtime::{
+    Context, Handle, Realm, alloc_error::AllocResult, array_object::create_array_from_list,
+    error::type_error, intrinsic_builder::IntrinsicBuilder, intrinsics::intrinsics::Intrinsic,
+    object_value::ObjectValue, ordinary_object::ordinary_object_create,
+};
+use crate::{intrinsic_methods, runtime_fn};
 
 /// %Intl.ListFormat.prototype% (https://tc39.es/ecma402/#sec-properties-of-the-intl-listformat-prototype-object),
 /// 14.3.

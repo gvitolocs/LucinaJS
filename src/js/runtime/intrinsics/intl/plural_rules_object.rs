@@ -10,16 +10,6 @@
 
 use std::rc::Rc;
 
-use crate::extend_object;
-use crate::runtime::{
-    Context, EvalResult, Handle, Value,
-    error::{range_error, type_error},
-    gc::{HeapItem, HeapPtr, HeapVisitor},
-    intrinsics::intrinsics::Intrinsic,
-    object_value::ObjectValue,
-    ordinary_object::ObjectBuilder,
-};
-
 use brimstone_intl_data::IntlDataProvider;
 use icu_plurals::{
     PluralCategory, PluralOperands, PluralRules, PluralRulesOptions, PluralRulesPreferences,
@@ -34,6 +24,15 @@ use super::number_format_core::{
 };
 use super::number_format_object::set_number_format_digit_options;
 use super::options::{coerce_options_to_object, get_enum_option, get_name_option};
+use crate::extend_object;
+use crate::runtime::{
+    Context, EvalResult, Handle, Value,
+    error::{range_error, type_error},
+    gc::{HeapItem, HeapPtr, HeapVisitor},
+    intrinsics::intrinsics::Intrinsic,
+    object_value::ObjectValue,
+    ordinary_object::ObjectBuilder,
+};
 
 /// [[Type]] (https://tc39.es/ecma402/#sec-intl-pluralrules-constructor), 17.1.1 step 8.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -178,10 +177,7 @@ impl PluralRulesObject {
     /// 17.3.4 step 2), on the `this` value itself. PluralRules has no %Intl%.[[FallbackSymbol]]
     /// instance to look through, because 17.1.1 step 1 refuses the call mode that would have left
     /// one.
-    pub fn require_initialized(
-        cx: Context,
-        this_value: Handle<Value>,
-    ) -> EvalResult<Handle<Self>> {
+    pub fn require_initialized(cx: Context, this_value: Handle<Value>) -> EvalResult<Handle<Self>> {
         if !this_value.is_object() {
             return type_error(cx, "Intl.PluralRules method called on incompatible receiver");
         }
@@ -231,7 +227,11 @@ impl PluralRulesObject {
         // and no option value is looked up against a list of supported ones.
         let resolved = resolve_locale(
             &requested_locales,
-            if matcher == "lookup" { Matcher::Lookup } else { Matcher::BestFit },
+            if matcher == "lookup" {
+                Matcher::Lookup
+            } else {
+                Matcher::BestFit
+            },
         );
 
         // Step 6.
@@ -314,10 +314,7 @@ impl PluralRulesObject {
         };
 
         // Steps 1 to 10, which are [`plural_rule_select`] over the digits 16.5.2 arrived at.
-        Ok(plural_rule_select(
-            &rules(cx, &resolved),
-            &round_number(&resolved.slots, n),
-        ))
+        Ok(plural_rule_select(&rules(cx, &resolved), &round_number(&resolved.slots, n)))
     }
 
     /// ResolvePluralRange (https://tc39.es/ecma402/#sec-resolvepluralrange), 17.5.4.
@@ -441,7 +438,6 @@ fn category_of(name: &str) -> PluralCategory {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use crate::runtime::intrinsics::intl::number_format_core::{
         RoundingType, Style, TrailingZeroDisplay, math_value_from_string,
     };
@@ -459,10 +455,7 @@ mod tests {
     fn select(rules: &PluralRulesWithRanges<PluralRules>, text: &str) -> &'static str {
         plural_rule_select(
             rules,
-            &round_number(
-                &NumberFormatSlots::default(),
-                &math_value_from_string(text),
-            ),
+            &round_number(&NumberFormatSlots::default(), &math_value_from_string(text)),
         )
     }
 
@@ -503,10 +496,7 @@ mod tests {
         );
         assert_eq!(categories(&rules("da", PluralRuleType::Cardinal)), ["one", "other"]);
         assert_eq!(categories(&rules("da", PluralRuleType::Ordinal)), ["other"]);
-        assert_eq!(
-            categories(&rules("it", PluralRuleType::Cardinal)),
-            ["one", "many", "other"]
-        );
+        assert_eq!(categories(&rules("it", PluralRuleType::Cardinal)), ["one", "many", "other"]);
         assert_eq!(categories(&rules("it", PluralRuleType::Ordinal)), ["many", "other"]);
 
         // 17.3.2 step 4: "other" is always one of them, because it is the fallback of 17.5.1.
@@ -597,10 +587,7 @@ mod tests {
 
         // 17.1.1 step 13 over 16.1.2: `minimumFractionDigits: 2` shows two fraction digits of a
         // whole one, which takes it off `one` ...
-        assert_eq!(
-            select_with(&en, |slots| slots.minimum_fraction_digits = 2, "1"),
-            "other"
-        );
+        assert_eq!(select_with(&en, |slots| slots.minimum_fraction_digits = 2, "1"), "other");
         // ... unless 16.1.2 steps 25-28 also said `stripIfInteger`, which takes them off again.
         assert_eq!(
             select_with(
@@ -615,24 +602,12 @@ mod tests {
         );
 
         // Rounding at the maximum of 0 fraction digits is what decides between the neighbours.
-        assert_eq!(
-            select_with(&en, |slots| slots.maximum_fraction_digits = 0, "1.4"),
-            "one"
-        );
-        assert_eq!(
-            select_with(&en, |slots| slots.maximum_fraction_digits = 0, "1.5"),
-            "other"
-        );
+        assert_eq!(select_with(&en, |slots| slots.maximum_fraction_digits = 0, "1.4"), "one");
+        assert_eq!(select_with(&en, |slots| slots.maximum_fraction_digits = 0, "1.5"), "other");
 
         // `minimumIntegerDigits` pads in front, which UTS 35's `i` reads as the number it is.
-        assert_eq!(
-            select_with(&en, |slots| slots.minimum_integer_digits = 3, "1"),
-            "one"
-        );
-        assert_eq!(
-            select_with(&en, |slots| slots.minimum_integer_digits = 3, "0"),
-            "other"
-        );
+        assert_eq!(select_with(&en, |slots| slots.minimum_integer_digits = 3, "1"), "one");
+        assert_eq!(select_with(&en, |slots| slots.minimum_integer_digits = 3, "0"), "other");
 
         // Significant-digit rounding shows zeros of its own, so `1` is not `one` any more.
         assert_eq!(
@@ -694,20 +669,16 @@ mod tests {
             let rules = rules(tag, PluralRuleType::Cardinal);
 
             for text in ["NaN", "Infinity", "-Infinity"] {
-                let rounded = round_number(
-                    &NumberFormatSlots::default(),
-                    &math_value_from_string(text),
-                );
+                let rounded =
+                    round_number(&NumberFormatSlots::default(), &math_value_from_string(text));
 
                 assert!(matches!(rounded, RoundedNumber::Special(..)));
                 assert_eq!(plural_rule_select(&rules, &rounded), "other");
             }
 
             // 17.5.4 step 4 for the pair of infinities, whose strings are the same word.
-            let infinity = round_number(
-                &NumberFormatSlots::default(),
-                &math_value_from_string("Infinity"),
-            );
+            let infinity =
+                round_number(&NumberFormatSlots::default(), &math_value_from_string("Infinity"));
             assert_eq!(range_category(&rules, &infinity, &infinity), "other");
         }
     }

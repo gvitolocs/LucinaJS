@@ -286,7 +286,11 @@ impl GarbageCollector {
 
         #[cfg(feature = "handle_leak_trace")]
         if cx.options.gc_log {
-            eprintln!("jshandles n={}:\n{}", cx.heap.gc_stats().gc_count, super::handle::leak_trace::report());
+            eprintln!(
+                "jshandles n={}:\n{}",
+                cx.heap.gc_stats().gc_count,
+                super::handle::leak_trace::report()
+            );
         }
 
         // The heap is consistent again, so the host may allocate (and collect) from here on
@@ -309,7 +313,9 @@ impl GarbageCollector {
         match type_ {
             GcType::Grow { alloc_size, live } => {
                 debug_assert!(
-                    heap_size.is_power_of_two() && max_heap.is_power_of_two() && heap_size <= max_heap
+                    heap_size.is_power_of_two()
+                        && max_heap.is_power_of_two()
+                        && heap_size <= max_heap
                 );
                 Some(sizing::grow_size(
                     heap_size,
@@ -581,7 +587,10 @@ impl GarbageCollector {
 
     /// Resolve a weak pointer once liveness is final. Return the new location if the target is
     /// live, or None if it was collected.
-    pub fn resolve_weak_pointer(&self, target: HeapPtr<AnyHeapItem>) -> Option<HeapPtr<AnyHeapItem>> {
+    pub fn resolve_weak_pointer(
+        &self,
+        target: HeapPtr<AnyHeapItem>,
+    ) -> Option<HeapPtr<AnyHeapItem>> {
         match self.resolve_weak(target) {
             WeakResolution::Live(new_location) => Some(new_location),
             WeakResolution::Dead => None,
@@ -714,7 +723,9 @@ impl GarbageCollector {
 
         // Drop the texts of collected source files
         let mut source_cx = cx;
-        source_cx.source_texts.sweep(|file| self.resolve_weak_pointer(file));
+        source_cx
+            .source_texts
+            .sweep(|file| self.resolve_weak_pointer(file));
 
         // Fix the weak objects, handling objects that have been garbage collected
         self.fix_weak_refs();

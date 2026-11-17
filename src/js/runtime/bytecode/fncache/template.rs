@@ -7,14 +7,13 @@
 
 use allocator_api2::alloc::Global;
 
+use super::key::{FuncKind, NameProv, NodeKind, Walk};
+use super::prov_rules::{self, TextSource};
 use crate::{
     common::wtf_8::{Wtf8Str, Wtf8String},
     parser::ast,
     runtime::bytecode::constant_table_builder::Prov,
 };
-
-use super::key::{FuncKind, NameProv, NodeKind, Walk};
-use super::prov_rules::{self, TextSource};
 
 /// Heap item kinds that can appear in a constant table and can be rebuilt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,7 +97,12 @@ pub enum ConstEntry {
     Undefined,
     /// An interned string. `text` is stored verbatim only for intrinsic provenance.
     String { prov: Prov, text: Option<Vec<u8>> },
-    HeapItem { kind: HeapKind, prov: Prov, class_names: Option<ClassNamesDesc>, scope_names: Option<ScopeNamesDesc> },
+    HeapItem {
+        kind: HeapKind,
+        prov: Prov,
+        class_names: Option<ClassNamesDesc>,
+        scope_names: Option<ScopeNamesDesc>,
+    },
     /// An array index property key stored as a smi.
     ArrayIndex { value: u32, prov: Prov },
     /// A double, stored as raw bits.
@@ -203,7 +207,11 @@ pub fn node_text<'a>(walk: &Walk<'a>, ordinal: u32) -> Option<&'a Wtf8Str> {
 
 /// Resolve the text described by a provenance against the new function's AST. `intrinsic` is the
 /// verbatim text stored in the template for intrinsic provenance.
-pub fn resolve_text(walk: &Walk, prov: Prov, intrinsic: Option<&[u8]>) -> Option<Wtf8String<Global>> {
+pub fn resolve_text(
+    walk: &Walk,
+    prov: Prov,
+    intrinsic: Option<&[u8]>,
+) -> Option<Wtf8String<Global>> {
     match prov_rules::source_of(prov) {
         TextSource::Node(ordinal) => node_text(walk, ordinal).map(|t| t.to_owned_in(Global)),
         TextSource::Quasi(template_ordinal, quasi_index) => {
@@ -486,7 +494,14 @@ fn read_const_entry(r: &mut Reader) -> Option<ConstEntry> {
                         let is_getter = r.bool()?;
                         let is_setter = r.bool()?;
                         let is_private = r.bool()?;
-                        methods.push(MethodDesc { name_prov, name_text, is_static, is_getter, is_setter, is_private });
+                        methods.push(MethodDesc {
+                            name_prov,
+                            name_text,
+                            is_static,
+                            is_getter,
+                            is_setter,
+                            is_private,
+                        });
                     }
                     let read_loc = |r: &mut Reader| -> Option<Option<(u32, u32)>> {
                         match r.u8()? {
@@ -859,13 +874,26 @@ mod tests {
             NameProv::MethodKey(10, 2),
             NameProv::Text,
         ];
-        let kinds = [FuncKind::Declaration, FuncKind::Expression, FuncKind::Arrow, FuncKind::Method, FuncKind::Constructor];
+        let kinds = [
+            FuncKind::Declaration,
+            FuncKind::Expression,
+            FuncKind::Arrow,
+            FuncKind::Method,
+            FuncKind::Constructor,
+        ];
         let mut t = sample_template(3);
         t.constants = vec![ConstEntry::Undefined];
         for prov in provs {
-            t.constants.push(ConstEntry::String { prov, text: Some(vec![0, 255, 1]) });
-            t.constants.push(ConstEntry::ArrayIndex { value: u32::MAX, prov });
-            t.constants.push(ConstEntry::HeapItem { kind: HeapKind::RegExp, prov, class_names: None, scope_names: None });
+            t.constants
+                .push(ConstEntry::String { prov, text: Some(vec![0, 255, 1]) });
+            t.constants
+                .push(ConstEntry::ArrayIndex { value: u32::MAX, prov });
+            t.constants.push(ConstEntry::HeapItem {
+                kind: HeapKind::RegExp,
+                prov,
+                class_names: None,
+                scope_names: None,
+            });
         }
         for kind in [
             HeapKind::BigInt,
@@ -879,14 +907,23 @@ mod tests {
             t.constants.push(ConstEntry::HeapItem {
                 kind,
                 prov: Prov::Intrinsic,
-                class_names: Some(ClassNamesDesc { methods: vec![], home_object: None, static_home_object: Some((u32::MAX, 0)) }),
+                class_names: Some(ClassNamesDesc {
+                    methods: vec![],
+                    home_object: None,
+                    static_home_object: Some((u32::MAX, 0)),
+                }),
                 scope_names: Some(ScopeNamesDesc { flags: 255 }),
             });
         }
         t.constants.push(ConstEntry::Double(u64::MAX));
         t.constants.push(ConstEntry::Offset(isize::MIN));
         t.constants.push(ConstEntry::Offset(isize::MAX));
-        t.handlers = vec![HandlerEntry { start: u32::MAX, end: 0, handler: 7, error_register: i32::MIN }];
+        t.handlers = vec![HandlerEntry {
+            start: u32::MAX,
+            end: 0,
+            handler: 7,
+            error_register: i32::MIN,
+        }];
         t.nested.clear();
         for (i, kind) in kinds.iter().enumerate() {
             t.nested.push(NestedEntry {
@@ -894,7 +931,11 @@ mod tests {
                 node_ordinal: 1,
                 kind: *kind,
                 name_prov: names[i % names.len()],
-                name_text: if i % 2 == 0 { Some(vec![i as u8]) } else { None },
+                name_text: if i % 2 == 0 {
+                    Some(vec![i as u8])
+                } else {
+                    None
+                },
                 is_base: i % 2 == 1,
                 class_ordinal: if i % 2 == 0 { None } else { Some(u32::MAX) },
                 scope_chain: vec![0; i],
@@ -902,11 +943,22 @@ mod tests {
         }
         for name_prov in names {
             t.name_prov = name_prov;
-            t.new_target_index = if matches!(name_prov, NameProv::None) { None } else { Some(u32::MAX) };
+            t.new_target_index = if matches!(name_prov, NameProv::None) {
+                None
+            } else {
+                Some(u32::MAX)
+            };
             for handler_width in 0..3 {
                 t.handler_width = handler_width;
                 for op in 0..4u8 {
-                    t.patches = vec![ScopePatch { offset: 0, len: 5, op, reg: i32::MIN, slot: u32::MAX, depth_base: 0 }];
+                    t.patches = vec![ScopePatch {
+                        offset: 0,
+                        len: 5,
+                        op,
+                        reg: i32::MIN,
+                        slot: u32::MAX,
+                        depth_base: 0,
+                    }];
                     assert_eq!(deserialize(&serialize(&t)).as_ref(), Some(&t));
                 }
             }

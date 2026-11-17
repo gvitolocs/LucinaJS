@@ -15,6 +15,7 @@
 //! makes ECMA-402's named records come out of `writeable`, and the zone is the host's own, read
 //! through the `timezone_provider` database the fork already ships for Temporal.
 
+use brimstone_intl_data::{IntlDataProvider, TIME_ZONE_NAMES_ARE_BAKED};
 use icu_calendar::{Date, Gregorian};
 use icu_datetime::DateTimeFormatterPreferences;
 use icu_datetime::fieldsets::builder::{DateFields, FieldSetBuilder, ZoneStyle};
@@ -29,18 +30,16 @@ use icu_datetime::provider::pattern::runtime::Pattern as RuntimePattern;
 use icu_decimal::parts as decimal_parts;
 use icu_locale::Locale;
 use icu_locale::preferences::extensions::unicode::keywords::HourCycle as IcuHourCycle;
+use icu_time::Time;
 use icu_time::TimeZone;
 use icu_time::zone::UtcOffset;
 use icu_time::zone::models::AtTime;
-use icu_time::Time;
 use timezone_provider::provider::{TimeZoneId, TimeZoneProvider};
 use writeable::{Part, PartsWrite, TryWriteable, Writeable};
 use zerovec::ZeroVec;
 
-use crate::runtime::Context;
-use brimstone_intl_data::{IntlDataProvider, TIME_ZONE_NAMES_ARE_BAKED};
-
 use super::cache::DataLocale;
+use crate::runtime::Context;
 
 /// Which zone a [`FormatZone`] is, in the form the zone database and 11.5.3 name it in.
 ///
@@ -160,10 +159,7 @@ impl FormatZone {
             ZoneId::Offset => self.offset_seconds,
         };
 
-        Ok(Self {
-            offset_seconds,
-            ..self
-        })
+        Ok(Self { offset_seconds, ..self })
     }
 
     /// [`FormatZone::with_offset_at`] of the epoch nanoseconds of 15.6.14's Value Format Record, which
@@ -181,19 +177,12 @@ impl FormatZone {
             ZoneId::Offset => self.offset_seconds,
         };
 
-        Ok(Self {
-            offset_seconds,
-            ..self
-        })
+        Ok(Self { offset_seconds, ..self })
     }
 
     /// The offset the zone named by `id` had at a moment, which is 11.5.10's `GetNamedZoneOffset`
     /// over the zone database.
-    pub fn offset_of(
-        cx: Context,
-        id: TimeZoneId,
-        epoch_milliseconds: f64,
-    ) -> Result<i32, String> {
+    pub fn offset_of(cx: Context, id: TimeZoneId, epoch_milliseconds: f64) -> Result<i32, String> {
         let error = || format!("Invalid time zone specified: {id:?}");
 
         FormatZone::offset_of_nanoseconds(
@@ -340,20 +329,20 @@ pub fn host_zone(cx: Context) -> FormatZone {
     let name = std::env::var("TZ")
         .ok()
         .filter(|value| !value.is_empty())
+        .or_else(|| read_first_line("/etc/timezone"))
         .or_else(|| {
-            read_first_line("/etc/timezone")
-        })
-        .or_else(|| {
-            std::fs::read_link("/etc/localtime").ok().and_then(|target| {
-                let target = target.to_string_lossy().into_owned();
+            std::fs::read_link("/etc/localtime")
+                .ok()
+                .and_then(|target| {
+                    let target = target.to_string_lossy().into_owned();
 
-                // The symlink names the zone file the distribution keeps under `zoneinfo/`, and the
-                // part after that directory is the id.
-                target
-                    .split_once("/zoneinfo/")
-                    .map(|(_, id)| id.to_string())
-                    .filter(|value| !value.is_empty())
-            })
+                    // The symlink names the zone file the distribution keeps under `zoneinfo/`, and the
+                    // part after that directory is the id.
+                    target
+                        .split_once("/zoneinfo/")
+                        .map(|(_, id)| id.to_string())
+                        .filter(|value| !value.is_empty())
+                })
         })
         .unwrap_or_else(|| "UTC".to_string());
 
@@ -416,11 +405,19 @@ fn parse_offset(name: &str) -> Option<ParsedOffset> {
             ([offset_digits(&hmm[..2]), offset_digits(&hmm[3..]), Some(0)], false)
         }
         hmm if hmm.len() == 6 && hmm[2] != b':' => (
-            [offset_digits(&hmm[..2]), offset_digits(&hmm[2..4]), offset_digits(&hmm[4..])],
+            [
+                offset_digits(&hmm[..2]),
+                offset_digits(&hmm[2..4]),
+                offset_digits(&hmm[4..]),
+            ],
             true,
         ),
         hmm if hmm.len() == 8 && hmm[2] == b':' && hmm[5] == b':' => (
-            [offset_digits(&hmm[..2]), offset_digits(&hmm[3..5]), offset_digits(&hmm[6..])],
+            [
+                offset_digits(&hmm[..2]),
+                offset_digits(&hmm[3..5]),
+                offset_digits(&hmm[6..]),
+            ],
             true,
         ),
         _ => return None,
@@ -1148,14 +1145,12 @@ impl FieldSetKey {
 
         let kept = match kind {
             TemporalKind::Date if self.date_fields.is_some() => date_only,
-            TemporalKind::YearMonth if self.date_fields.is_some() => Self {
-                date_fields: Some(DateFieldsKey::YearMonth),
-                ..date_only
-            },
-            TemporalKind::MonthDay if self.date_fields.is_some() => Self {
-                date_fields: Some(DateFieldsKey::MonthDay),
-                ..date_only
-            },
+            TemporalKind::YearMonth if self.date_fields.is_some() => {
+                Self { date_fields: Some(DateFieldsKey::YearMonth), ..date_only }
+            }
+            TemporalKind::MonthDay if self.date_fields.is_some() => {
+                Self { date_fields: Some(DateFieldsKey::MonthDay), ..date_only }
+            }
             TemporalKind::Time => Self {
                 date_fields: None,
                 // 2.3 takes no year width for a field set with no year in it, which
@@ -1169,10 +1164,7 @@ impl FieldSetKey {
             // `allowedOptions` of `Temporal.PlainDateTime` is every component, so the zone is the one
             // field of the base it has to lose, and `Temporal.Instant` is the one type that keeps a
             // zone at all: both are the base itself beside that.
-            TemporalKind::DateTime => Self {
-                zone_style: None,
-                ..self
-            },
+            TemporalKind::DateTime => Self { zone_style: None, ..self },
             TemporalKind::Instant => self,
             TemporalKind::Date | TemporalKind::YearMonth | TemporalKind::MonthDay => {
                 return None;
@@ -1529,10 +1521,9 @@ impl std::fmt::Display for FieldSetError {
                 formatter,
                 "the components of one group were asked for at two different widths"
             ),
-            Self::NarrowDayPeriod => write!(
-                formatter,
-                "the narrow day period has no phrase names in this build"
-            ),
+            Self::NarrowDayPeriod => {
+                write!(formatter, "the narrow day period has no phrase names in this build")
+            }
             Self::NarrowNames => {
                 write!(formatter, "the narrow names are not in this build's data")
             }
@@ -1601,7 +1592,9 @@ fn length_for(
         // The time-only formats still want a length, because the CLDR *time* skeleton is keyed by
         // the same option; the shorthand of `timeStyle` says it and the components of the time group
         // do not.
-        return Ok(components.time_style.map(|style| length_key_of(style.to_length())));
+        return Ok(components
+            .time_style
+            .map(|style| length_key_of(style.to_length())));
     }
 
     if let Some(style) = components.date_style {
@@ -1723,7 +1716,8 @@ pub struct DateTimeRenderer {
     /// The same field set as a range formatter, which is what `formatRange` of 11.3.4 renders
     /// through. `None` when the data has no range pattern for this group of fields, in which case
     /// 11.5.8's fallback spells both ends out.
-    range: Option<icu_datetime::range::FixedCalendarDateRangeFormatter<Gregorian, CompositeFieldSet>>,
+    range:
+        Option<icu_datetime::range::FixedCalendarDateRangeFormatter<Gregorian, CompositeFieldSet>>,
     /// The hour cycle the format renders with, which is what 11.1.2 step 33 reports and what the
     /// instance needs in order to answer 11.3.2's `hourCycle` row. `None` when the format has no
     /// hour: the locale's own answer is then not used, because there is nothing to render with it.
@@ -1844,10 +1838,7 @@ impl RenderedWidths {
                         12 => HourCycle::H12,
                         24 => HourCycle::H24,
                         0 => {
-                            if midnight
-                                .iter()
-                                .any(|part| part.kind == PartKind::DayPeriod)
-                            {
+                            if midnight.iter().any(|part| part.kind == PartKind::DayPeriod) {
                                 HourCycle::H11
                             } else {
                                 HourCycle::H23
@@ -2020,13 +2011,7 @@ impl DateTimeRenderer {
             return None;
         };
 
-        Some(self.range_parts_at(
-            start_time,
-            start_zone,
-            end_time,
-            end_zone,
-            self.range.as_ref(),
-        ))
+        Some(self.range_parts_at(start_time, start_zone, end_time, end_zone, self.range.as_ref()))
     }
 
     /// [`DateTimeRenderer::format_range_parts`] of two ends that are already nanoseconds since the
@@ -2145,9 +2130,7 @@ impl DateTimeRenderer {
         end: f64,
         end_zone: &FormatZone,
     ) -> Option<String> {
-        Some(join_parts(
-            &self.format_range_parts(start, start_zone, end, end_zone)?,
-        ))
+        Some(join_parts(&self.format_range_parts(start, start_zone, end, end_zone)?))
     }
 
     /// 11.5.9's `FormatDateTimeRange` of two Temporal ends, which 15.6.8 has already asked to be the
@@ -2294,9 +2277,7 @@ impl DateTimeRenderer {
         // are two digits wide or one, and `24` is the answer of either.
         if self.hour_cycle == Some(HourCycle::H24) {
             for part in &mut *parts {
-                if part.kind == PartKind::Hour
-                    && part.value.trim().parse::<u32>().ok() == Some(0)
-                {
+                if part.kind == PartKind::Hour && part.value.trim().parse::<u32>().ok() == Some(0) {
                     part.value = "24".to_owned();
                 }
             }
@@ -2355,11 +2336,7 @@ fn join_parts(parts: &[DateTimePart]) -> String {
 ///   like the end date, is `endRange`;
 /// * what is left in between is the glue - the ` - ` of an English day range - which belongs to the
 ///   pattern rather than to either of its two sides.
-fn assign_range_sources(
-    parts: &mut [DateTimePart],
-    start: &[DateTimePart],
-    end: &[DateTimePart],
-) {
+fn assign_range_sources(parts: &mut [DateTimePart], start: &[DateTimePart], end: &[DateTimePart]) {
     if parts.len() >= start.len() + end.len() {
         let head_len = start.len().min(parts.len());
         let (head, rest) = parts.split_at_mut(head_len);
@@ -2523,16 +2500,13 @@ fn civil_from_epoch_nanoseconds(
     fields.extended_year = Some(year);
     fields.ordinal_month = Some(month);
     fields.day = Some(day_of_month);
-    let date =
-        Date::try_from_fields(fields, icu_calendar::options::DateFromFieldsOptions::default(), Gregorian)
-            .ok()?;
-    let time = Time::try_new(
-        hour as u8,
-        minute as u8,
-        second as u8,
-        nanosecond as u32,
+    let date = Date::try_from_fields(
+        fields,
+        icu_calendar::options::DateFromFieldsOptions::default(),
+        Gregorian,
     )
     .ok()?;
+    let time = Time::try_new(hour as u8, minute as u8, second as u8, nanosecond as u32).ok()?;
 
     Some(DateTime { date, time })
 }
@@ -2544,7 +2518,11 @@ fn civil_from_epoch_nanoseconds(
 /// same rule puts the leap day at the end of, which is why March is month 0 here.
 fn civil_from_days(days: i64) -> (i32, u8, u8) {
     let shifted = days + 719_468;
-    let era = if shifted >= 0 { shifted } else { shifted - 146_096 } / 146_097;
+    let era = if shifted >= 0 {
+        shifted
+    } else {
+        shifted - 146_096
+    } / 146_097;
     let day_of_era = shifted - era * 146_097;
     let year_of_era =
         (day_of_era - day_of_era / 1460 + day_of_era / 36524 - day_of_era / 146_096) / 365;
@@ -2577,11 +2555,7 @@ pub struct DateTimePart {
 
 impl DateTimePart {
     pub fn new(kind: PartKind, value: impl Into<String>) -> Self {
-        Self {
-            kind,
-            value: value.into(),
-            source: None,
-        }
+        Self { kind, value: value.into(), source: None }
     }
 
     /// Whether two parts of a partition are the same record, which for this question is the type and
@@ -2712,10 +2686,7 @@ struct PartsCollector {
 
 impl PartsCollector {
     fn new() -> Self {
-        Self {
-            parts: Vec::new(),
-            container: PartKind::Literal,
-        }
+        Self { parts: Vec::new(), container: PartKind::Literal }
     }
 
     fn into_parts(self) -> Vec<DateTimePart> {
@@ -2778,8 +2749,9 @@ mod tests {
     /// The civil parts of a moment in a zone of one offset, as `(year, month, day, hour, minute,
     /// second)`.
     fn civil(epoch_milliseconds: f64, offset_seconds: i32) -> (i32, u8, u8, u8, u8, u8) {
-        let date_time = civil_date_time(epoch_milliseconds, offset_seconds)
-            .unwrap_or_else(|| panic!("{epoch_milliseconds} in {offset_seconds} is not renderable"));
+        let date_time = civil_date_time(epoch_milliseconds, offset_seconds).unwrap_or_else(|| {
+            panic!("{epoch_milliseconds} in {offset_seconds} is not renderable")
+        });
 
         (
             date_time.date.year().extended_year(),
@@ -2901,8 +2873,22 @@ mod tests {
         for text in [
             // A one-digit hour is not in the grammar, which is two digits of hour; `Z` is neither
             // an offset nor an id the database has.
-            "Z", "UTC", "gmt", "+", "-8", "+8", "+0", "+24", "-24:00", "+5:3", "+5:30", "+053",
-            "+0:30", "05:30", "+05:30:1", "Europe/Rome",
+            "Z",
+            "UTC",
+            "gmt",
+            "+",
+            "-8",
+            "+8",
+            "+0",
+            "+24",
+            "-24:00",
+            "+5:3",
+            "+5:30",
+            "+053",
+            "+0:30",
+            "05:30",
+            "+05:30:1",
+            "Europe/Rome",
         ] {
             assert!(parse_offset(text).is_none(), "{text} is not an offset");
         }
@@ -2929,28 +2915,16 @@ mod tests {
 
     #[test]
     fn the_hour_cycle_a_locale_counts_by() {
-        assert_eq!(
-            hour_cycle_of_locale(DataLocale::try_from("en").unwrap()),
-            Some(HourCycle::H12)
-        );
-        assert_eq!(
-            hour_cycle_of_locale(DataLocale::try_from("da").unwrap()),
-            Some(HourCycle::H23)
-        );
-        assert_eq!(
-            hour_cycle_of_locale(DataLocale::try_from("it").unwrap()),
-            Some(HourCycle::H23)
-        );
+        assert_eq!(hour_cycle_of_locale(DataLocale::try_from("en").unwrap()), Some(HourCycle::H12));
+        assert_eq!(hour_cycle_of_locale(DataLocale::try_from("da").unwrap()), Some(HourCycle::H23));
+        assert_eq!(hour_cycle_of_locale(DataLocale::try_from("it").unwrap()), Some(HourCycle::H23));
     }
 
     #[test]
     fn a_field_set_is_the_shape_of_the_bag() {
         // A bag of nothing has no format to match, and the refusals are the ones the instance reports
         // in words rather than rendering a different format.
-        assert_eq!(
-            FieldSetKey::for_components(&bag()),
-            Err(FieldSetError::NoFields)
-        );
+        assert_eq!(FieldSetKey::for_components(&bag()), Err(FieldSetError::NoFields));
 
         // The narrow of Table 16 is not a length of a skeleton, so the bag is patterned at the longest
         // group and the width is carried beside it for the pattern rewrite. See [`NarrowWidths`].
@@ -2958,14 +2932,7 @@ mod tests {
         narrow.month = Some(Width::Narrow);
         let key = FieldSetKey::for_components(&narrow).expect("a narrow month");
         assert_eq!(key.length, Some(LengthKey::Long));
-        assert_eq!(
-            key.narrow,
-            NarrowWidths {
-                month: true,
-                weekday: false,
-                era: false,
-            }
-        );
+        assert_eq!(key.narrow, NarrowWidths { month: true, weekday: false, era: false });
 
         // The day period is the named family the rewrite has no answer for: its narrow is the phrase
         // of `bbbbb`, which no table of this build carries.
@@ -2983,10 +2950,7 @@ mod tests {
         mixed.month = Some(Width::Long);
         mixed.weekday = Some(Width::Short);
         mixed.day = Some(Width::Numeric);
-        assert_eq!(
-            FieldSetKey::for_components(&mixed),
-            Err(FieldSetError::MixedWidths)
-        );
+        assert_eq!(FieldSetKey::for_components(&mixed), Err(FieldSetError::MixedWidths));
 
         // The digit widths are not that: `{ month: "long", day: "2-digit" }` is the long month with
         // the day padded on the way out, which the renderer does carry.
@@ -3000,10 +2964,7 @@ mod tests {
         let mut no_month = bag();
         no_month.year = Some(Width::Numeric);
         no_month.day = Some(Width::Numeric);
-        assert_eq!(
-            FieldSetKey::for_components(&no_month),
-            Err(FieldSetError::UnsupportedShape)
-        );
+        assert_eq!(FieldSetKey::for_components(&no_month), Err(FieldSetError::UnsupportedShape));
 
         let mut date = bag();
         date.year = Some(Width::Numeric);
@@ -3060,7 +3021,13 @@ mod tests {
         assert_eq!(
             sources,
             [
-                "shared", "shared", "startRange", "shared", "endRange", "shared", "shared"
+                "shared",
+                "shared",
+                "startRange",
+                "shared",
+                "endRange",
+                "shared",
+                "shared"
             ]
         );
     }
@@ -3103,7 +3070,8 @@ mod tests {
         month_day.month = Some(Width::Short);
         month_day.day = Some(Width::Numeric);
         let key = FieldSetKey::for_components(&month_day).expect("a month and a day");
-        let renderer = DateTimeRenderer::try_new("en", key).expect("the rendering of a month and a day");
+        let renderer =
+            DateTimeRenderer::try_new("en", key).expect("the rendering of a month and a day");
 
         let year_apart = renderer
             .format_range_parts(morning, &zone, morning + 365.0 * 86_400_000.0, &zone)
@@ -3125,7 +3093,8 @@ mod tests {
         time.minute = Some(Width::Numeric);
         time.second = Some(Width::Numeric);
         let key = FieldSetKey::for_components(&time).expect("a minute and a second");
-        let renderer = DateTimeRenderer::try_new("en", key).expect("the rendering of a minute and a second");
+        let renderer =
+            DateTimeRenderer::try_new("en", key).expect("the rendering of a minute and a second");
 
         let zone = FormatZone::from_offset_seconds(0);
         let start = 1_771_400_000_000.0_f64;
@@ -3148,12 +3117,16 @@ mod tests {
         let apart = renderer
             .format_range_parts(start, &zone, start + 60_000.0, &zone)
             .expect("a minute apart");
-        assert!(apart
-            .iter()
-            .any(|part| part.source == Some(RangeSource::StartRange)));
-        assert!(apart
-            .iter()
-            .any(|part| part.source == Some(RangeSource::EndRange)));
+        assert!(
+            apart
+                .iter()
+                .any(|part| part.source == Some(RangeSource::StartRange))
+        );
+        assert!(
+            apart
+                .iter()
+                .any(|part| part.source == Some(RangeSource::EndRange))
+        );
     }
 
     #[test]
@@ -3228,26 +3201,32 @@ mod tests {
         // at all or `inherit` was `all`. This is what `temporal-objects-not-overlapping-options.js`
         // means by "a PlainDate formats like `{ month }` alone".
         asked.month = Some(Width::TwoDigit);
-        let date = temporal_components(&asked, TemporalKind::Date).expect("a month is a date field");
+        let date =
+            temporal_components(&asked, TemporalKind::Date).expect("a month is a date field");
         assert_eq!(date.month, Some(Width::TwoDigit), "the month the bag asked for");
         assert_eq!(date.hour, None, "the hour a PlainDate has no field for is left behind");
         assert_eq!(
-            date.day,
-            None,
+            date.day, None,
             "a bag that named one relevant field gets that field, not the whole date group"
         );
 
         // An empty bag is the other half of 15.6.1: `required` and `defaults` are both `date`, so the
         // type's own three fields are filled in at `numeric`.
-        let filled = temporal_components(&bag(), TemporalKind::Date).expect("a bag of nothing has a date");
-        assert_eq!(filled.month, Some(Width::Numeric), "15.6.1's `defaults` fill what was asked for");
+        let filled =
+            temporal_components(&bag(), TemporalKind::Date).expect("a bag of nothing has a date");
+        assert_eq!(
+            filled.month,
+            Some(Width::Numeric),
+            "15.6.1's `defaults` fill what was asked for"
+        );
         assert_eq!(filled.day, Some(Width::Numeric), "of the whole date group");
 
         // `inherit` of `all` is 15.6.20's answer for an instant, which takes the whole bag because an
         // instant has every field, zone name included.
         let mut asked = bag();
         asked.time_zone_name = Some(TimeZoneNameStyle::Short);
-        let instant = temporal_components(&asked, TemporalKind::Instant).expect("an instant has a zone");
+        let instant =
+            temporal_components(&asked, TemporalKind::Instant).expect("an instant has a zone");
         assert_eq!(
             instant.time_zone_name,
             Some(TimeZoneNameStyle::Short),
@@ -3277,7 +3256,8 @@ mod tests {
         time.minute = Some(Width::TwoDigit);
         time.second = Some(Width::TwoDigit);
         let key = FieldSetKey::for_components(&time).expect("an hour, a minute and a second");
-        let renderer = DateTimeRenderer::try_new("en", key).expect("the rendering of a time of day");
+        let renderer =
+            DateTimeRenderer::try_new("en", key).expect("the rendering of a time of day");
 
         let start = 1_628_037_045_000_000_000_i128;
         let text = renderer
@@ -3297,7 +3277,8 @@ mod tests {
         date.month = Some(Width::Long);
         date.day = Some(Width::Numeric);
         let key = FieldSetKey::for_components(&date).expect("a weekday date");
-        let renderer = DateTimeRenderer::try_new("en", key).expect("the rendering of a weekday date");
+        let renderer =
+            DateTimeRenderer::try_new("en", key).expect("the rendering of a weekday date");
 
         let extremes = renderer
             .format_range_nanoseconds(

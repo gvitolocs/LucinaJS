@@ -35,20 +35,6 @@
 
 use std::rc::Rc;
 
-use crate::common::wtf_8::Wtf8String;
-use crate::extend_object;
-use crate::runtime::{
-    Context, Handle, PropertyKey, Value,
-    abstract_operations::create_data_property_or_throw,
-    error::{range_error, type_error},
-    eval_result::EvalResult,
-    gc::{HeapItem, HeapPtr, HeapVisitor},
-    intrinsics::intrinsics::Intrinsic,
-    iterator::{get_iterator, iterator_close, iterator_step_value, IteratorHint},
-    object_value::ObjectValue,
-    ordinary_object::{ObjectBuilder, ordinary_object_create},
-};
-
 use brimstone_intl_data::IntlDataProvider;
 use icu_list::{
     ListFormatter, ListFormatterPreferences,
@@ -61,6 +47,19 @@ use super::cache::DataLocale;
 use super::intl_object::canonicalize_locale_list_argument;
 use super::locale_negotiation::{Matcher, resolve_locale};
 use super::options::{get_enum_option, get_name_option, get_options_object};
+use crate::common::wtf_8::Wtf8String;
+use crate::extend_object;
+use crate::runtime::{
+    Context, Handle, PropertyKey, Value,
+    abstract_operations::create_data_property_or_throw,
+    error::{range_error, type_error},
+    eval_result::EvalResult,
+    gc::{HeapItem, HeapPtr, HeapVisitor},
+    intrinsics::intrinsics::Intrinsic,
+    iterator::{IteratorHint, get_iterator, iterator_close, iterator_step_value},
+    object_value::ObjectValue,
+    ordinary_object::{ObjectBuilder, ordinary_object_create},
+};
 
 /// [[Type]] (https://tc39.es/ecma402/#sec-intl-listformat-constructor), 14.1.1 step 8.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -257,10 +256,7 @@ impl ListFormatObject {
     /// `? RequireInternalSlot(lf, [[InitializedListFormat]])` of 14.3.2 step 2, 14.3.3 step 2 and
     /// 14.3.4 step 2, on the `this` value itself. There is no UnwrapListFormat in front of it: 14.1.1
     /// step 1 refuses the only call mode that would have put an instance behind a fallback symbol.
-    pub fn require_initialized(
-        cx: Context,
-        this_value: Handle<Value>,
-    ) -> EvalResult<Handle<Self>> {
+    pub fn require_initialized(cx: Context, this_value: Handle<Value>) -> EvalResult<Handle<Self>> {
         if !this_value.is_object() {
             return type_error(cx, "Intl.ListFormat method called on incompatible receiver");
         }
@@ -312,7 +308,11 @@ impl ListFormatObject {
         // and no `-u-` extension of a requested tag survives into the reported one.
         let resolved = resolve_locale(
             &requested_locales,
-            if matcher == "lookup" { Matcher::Lookup } else { Matcher::BestFit },
+            if matcher == "lookup" {
+                Matcher::Lookup
+            } else {
+                Matcher::BestFit
+            },
         );
 
         // Step 6.
@@ -422,7 +422,9 @@ impl ListFormatObject {
                 // runs before the method reports it.
                 return match iterator_close(cx, iterator.iterator, error) {
                     // IteratorClose step 2: an abrupt completion is what comes back, never a value.
-                    Ok(_) => unreachable!("an error completion always leaves IteratorClose an error"),
+                    Ok(_) => {
+                        unreachable!("an error completion always leaves IteratorClose an error")
+                    }
                     Err(error) => Err(error),
                 };
             }
@@ -493,7 +495,13 @@ pub fn create_parts_from_list(formatter: &ListFormatter, list: &[Wtf8String]) ->
 
     let placeholders: Vec<&str> = list
         .iter()
-        .map(|text| if text.is_empty() { "" } else { ELEMENT_PLACEHOLDER })
+        .map(|text| {
+            if text.is_empty() {
+                ""
+            } else {
+                ELEMENT_PLACEHOLDER
+            }
+        })
         .collect();
 
     // Step 1 and steps 3 to 8 are what one formatting pass of `icu_list` is: every place written
@@ -502,7 +510,9 @@ pub fn create_parts_from_list(formatter: &ListFormatter, list: &[Wtf8String]) ->
     // build checks that instead of an `unwrap` carrying a panic into a call. The pass itself is
     // outside the check on purpose: inside `debug_assert!` a release build would not run it at all,
     // and would produce no parts.
-    let _written = formatter.format(placeholders.iter()).write_to_parts(&mut sink);
+    let _written = formatter
+        .format(placeholders.iter())
+        .write_to_parts(&mut sink);
 
     debug_assert!(_written.is_ok(), "writing into a sink of memory does not fail");
 
@@ -562,7 +572,8 @@ impl std::fmt::Write for ListPartsSink {
             return Ok(());
         }
 
-        self.parts.push(ListPart { kind, value: Wtf8String::from_str(text) });
+        self.parts
+            .push(ListPart { kind, value: Wtf8String::from_str(text) });
 
         Ok(())
     }
@@ -589,8 +600,18 @@ pub fn part_object(
 ) -> EvalResult<Handle<ObjectValue>> {
     let record = ordinary_object_create(cx)?;
 
-    create_data_property_or_throw(cx, record, kind, cx.alloc_string(part.kind.as_str())?.as_value())?;
-    create_data_property_or_throw(cx, record, value, cx.alloc_wtf8_string(&part.value)?.as_value())?;
+    create_data_property_or_throw(
+        cx,
+        record,
+        kind,
+        cx.alloc_string(part.kind.as_str())?.as_value(),
+    )?;
+    create_data_property_or_throw(
+        cx,
+        record,
+        value,
+        cx.alloc_wtf8_string(&part.value)?.as_value(),
+    )?;
 
     Ok(record)
 }
@@ -642,18 +663,25 @@ mod tests {
     #[test]
     fn every_built_in_locale_has_templates_of_every_type_and_style() {
         for locale in brimstone_intl_data::BUILT_IN_LOCALES {
-            for kind in
-                [ListFormatType::Conjunction, ListFormatType::Disjunction, ListFormatType::Unit]
-            {
-                for style in
-                    [ListFormatStyle::Long, ListFormatStyle::Short, ListFormatStyle::Narrow]
-                {
+            for kind in [
+                ListFormatType::Conjunction,
+                ListFormatType::Disjunction,
+                ListFormatType::Unit,
+            ] {
+                for style in [
+                    ListFormatStyle::Long,
+                    ListFormatStyle::Short,
+                    ListFormatStyle::Narrow,
+                ] {
                     // 14.2.3's template set carries Pair, Start, Middle and End for every length, and
                     // a list of four is the shortest case that reads all of them.
                     let parts = parts(locale, kind, style, &["A", "B", "C", "D"]);
 
                     assert_eq!(
-                        parts.iter().filter(|part| part.kind == ListPartKind::Element).count(),
+                        parts
+                            .iter()
+                            .filter(|part| part.kind == ListPartKind::Element)
+                            .count(),
                         4,
                         "{locale} {kind:?} {style:?}"
                     );
@@ -683,7 +711,9 @@ mod tests {
         // of its serial-comma separator.
         assert_eq!(
             kinds(&parts),
-            ["element", "literal", "element", "literal", "element", "literal", "element"]
+            [
+                "element", "literal", "element", "literal", "element", "literal", "element"
+            ]
         );
         assert_eq!(texts(&parts), ["A", ", ", "B", ", ", "C", ", and ", "D"]);
     }
@@ -692,7 +722,10 @@ mod tests {
     fn a_one_element_list_is_the_element_and_an_empty_list_is_nothing() {
         assert_eq!(
             parts("en", ListFormatType::Conjunction, ListFormatStyle::Long, &["A"]),
-            [ListPart { kind: ListPartKind::Element, value: Wtf8String::from_str("A") }]
+            [ListPart {
+                kind: ListPartKind::Element,
+                value: Wtf8String::from_str("A")
+            }]
         );
 
         // 14.5.2 steps 1 and 2: an empty list has no parts, so 14.5.3 concatenates nothing at all.
@@ -726,10 +759,7 @@ mod tests {
             format("en", conjunction, ListFormatStyle::Short, &["A", "B", "C"]),
             "A, B, & C"
         );
-        assert_eq!(
-            format("en", conjunction, ListFormatStyle::Narrow, &["A", "B", "C"]),
-            "A, B, C"
-        );
+        assert_eq!(format("en", conjunction, ListFormatStyle::Narrow, &["A", "B", "C"]), "A, B, C");
     }
 
     #[test]
@@ -797,18 +827,25 @@ mod tests {
     #[test]
     fn every_list_has_one_part_per_place_in_order_and_no_neighbouring_literals() {
         for locale in brimstone_intl_data::BUILT_IN_LOCALES {
-            for kind in
-                [ListFormatType::Conjunction, ListFormatType::Disjunction, ListFormatType::Unit]
-            {
-                for style in
-                    [ListFormatStyle::Long, ListFormatStyle::Short, ListFormatStyle::Narrow]
-                {
+            for kind in [
+                ListFormatType::Conjunction,
+                ListFormatType::Disjunction,
+                ListFormatType::Unit,
+            ] {
+                for style in [
+                    ListFormatStyle::Long,
+                    ListFormatStyle::Short,
+                    ListFormatStyle::Narrow,
+                ] {
                     for len in 0..6 {
                         let parts = parts(locale, kind, style, &vec!["AB"; len]);
 
                         // 14.5.2's return: every place of the list is exactly one part.
                         assert_eq!(
-                            parts.iter().filter(|part| part.kind == ListPartKind::Element).count(),
+                            parts
+                                .iter()
+                                .filter(|part| part.kind == ListPartKind::Element)
+                                .count(),
                             len,
                             "{locale} {kind:?} {style:?} {len}"
                         );

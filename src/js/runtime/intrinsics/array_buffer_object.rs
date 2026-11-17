@@ -298,7 +298,8 @@ impl ArrayBufferObject {
     /// The detach key of an attached external buffer. `DetachKey::None` for heap buffers and for
     /// detached buffers.
     pub fn detach_key(&self) -> DetachKey {
-        self.external.map_or(DetachKey::None, |external| external.key)
+        self.external
+            .map_or(DetachKey::None, |external| external.key)
     }
 
     /// The owner an attached external buffer keeps alive, if any.

@@ -6,27 +6,19 @@
 //! The instance, the reading of its options and the partition itself are
 //! [`super::relative_time_format_object`]; this file is only the methods a program calls.
 
+use super::number_format_prototype::{report_str, report_value};
+use super::relative_time_format_object::{RelativeTimeFormatObject, RelativeTimePart};
 use crate::{
-    intrinsic_methods, runtime_fn,
+    intrinsic_methods,
     runtime::{
         Context, Handle, PropertyKey, Realm, Value,
-        abstract_operations::create_data_property_or_throw,
-        alloc_error::AllocResult,
-        array_object::create_array_from_list,
-        error::type_error,
-        eval_result::EvalResult,
-        intrinsic_builder::IntrinsicBuilder,
-        intrinsics::intrinsics::Intrinsic,
-        object_value::ObjectValue,
-        ordinary_object::ordinary_object_create,
-        to_string,
+        abstract_operations::create_data_property_or_throw, alloc_error::AllocResult,
+        array_object::create_array_from_list, error::type_error, eval_result::EvalResult,
+        intrinsic_builder::IntrinsicBuilder, intrinsics::intrinsics::Intrinsic,
+        object_value::ObjectValue, ordinary_object::ordinary_object_create, to_string,
         type_utilities::to_number,
     },
-};
-
-use super::number_format_prototype::{report_str, report_value};
-use super::relative_time_format_object::{
-    RelativeTimeFormatObject, RelativeTimePart,
+    runtime_fn,
 };
 
 /// %Intl.RelativeTimeFormat.prototype% (https://tc39.es/ecma402/#sec-properties-of-intl-relativetimeformat-prototype-object),
@@ -60,7 +52,10 @@ impl RelativeTimeFormatPrototype {
 
         let Some(resolved) = relative_time_format.resolved() else {
             // The question `require_initialized` has already answered.
-            return type_error(cx, "Intl.RelativeTimeFormat method called on an uninitialized instance");
+            return type_error(
+                cx,
+                "Intl.RelativeTimeFormat method called on an uninitialized instance",
+            );
         };
 
         // [[Locale]] is a raw pointer inside the instance's own data, so it goes into a handle
@@ -128,7 +123,9 @@ impl RelativeTimeFormatPrototype {
         // record carries one.
         let mut elements = Vec::with_capacity(parts.len());
         for part in &parts {
-            elements.push(part_object(cx, part, cx.names.type_(), cx.names.value(), cx.names.unit())?.into());
+            elements.push(
+                part_object(cx, part, cx.names.type_(), cx.names.value(), cx.names.unit())?.into(),
+            );
         }
 
         Ok(create_array_from_list(cx, &elements)?.into())
@@ -154,11 +151,21 @@ fn part_object(
 ) -> EvalResult<Handle<ObjectValue>> {
     let record = ordinary_object_create(cx)?;
 
-    create_data_property_or_throw(cx, record, kind, cx.alloc_string(part.kind.as_str())?.as_value())?;
+    create_data_property_or_throw(
+        cx,
+        record,
+        kind,
+        cx.alloc_string(part.kind.as_str())?.as_value(),
+    )?;
     create_data_property_or_throw(cx, record, value, cx.alloc_string(&part.value)?.as_value())?;
 
     if let Some(unit_name) = part.unit {
-        create_data_property_or_throw(cx, record, unit, cx.alloc_string(unit_name.as_str())?.as_value())?;
+        create_data_property_or_throw(
+            cx,
+            record,
+            unit,
+            cx.alloc_string(unit_name.as_str())?.as_value(),
+        )?;
     }
 
     Ok(record)

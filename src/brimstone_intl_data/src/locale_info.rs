@@ -35,34 +35,10 @@ pub struct TimeData {
 /// The rows of CLDR 48.1.0 `timeData.json`, for the regions named in
 /// [`crate::BUILT_IN_LOCALES`] and for `001`.
 pub const TIME_DATA: &[(&str, TimeData)] = &[
-    (
-        "001",
-        TimeData {
-            preferred: "H",
-            allowed: "H h",
-        },
-    ),
-    (
-        "DK",
-        TimeData {
-            preferred: "H",
-            allowed: "H",
-        },
-    ),
-    (
-        "IT",
-        TimeData {
-            preferred: "H",
-            allowed: "H hB",
-        },
-    ),
-    (
-        "US",
-        TimeData {
-            preferred: "h",
-            allowed: "h hb H hB",
-        },
-    ),
+    ("001", TimeData { preferred: "H", allowed: "H h" }),
+    ("DK", TimeData { preferred: "H", allowed: "H" }),
+    ("IT", TimeData { preferred: "H", allowed: "H hB" }),
+    ("US", TimeData { preferred: "h", allowed: "h hb H hB" }),
 ];
 
 /// The rows of the same table that CLDR keys by whole locale rather than by region, which
@@ -71,27 +47,9 @@ pub const TIME_DATA: &[(&str, TimeData)] = &[
 /// and `it-IT` and `it-CH` are the two Italian rows that differ from their regions': Italy's own row
 /// allows `H hB` while the language's adds `h`, so `getHourCycles` for `it` reports `h12` as well.
 pub const TIME_DATA_LOCALES: &[(&str, TimeData)] = &[
-    (
-        "en-001",
-        TimeData {
-            preferred: "h",
-            allowed: "h hb H hB",
-        },
-    ),
-    (
-        "it-CH",
-        TimeData {
-            preferred: "H",
-            allowed: "H h hB",
-        },
-    ),
-    (
-        "it-IT",
-        TimeData {
-            preferred: "H",
-            allowed: "H h hB",
-        },
-    ),
+    ("en-001", TimeData { preferred: "h", allowed: "h hb H hB" }),
+    ("it-CH", TimeData { preferred: "H", allowed: "H h hB" }),
+    ("it-IT", TimeData { preferred: "H", allowed: "H h hB" }),
 ];
 
 /// The rows of CLDR 48.1.0 `calendarPreferenceData.xml`: the calendars in use in a region, most
@@ -123,38 +81,10 @@ pub struct WeekData {
 }
 
 pub const WEEK_DATA: &[(&str, WeekData)] = &[
-    (
-        "001",
-        WeekData {
-            first_day: "mon",
-            weekend_start: "sat",
-            weekend_end: "sun",
-        },
-    ),
-    (
-        "DK",
-        WeekData {
-            first_day: "mon",
-            weekend_start: "sat",
-            weekend_end: "sun",
-        },
-    ),
-    (
-        "IT",
-        WeekData {
-            first_day: "mon",
-            weekend_start: "sat",
-            weekend_end: "sun",
-        },
-    ),
-    (
-        "US",
-        WeekData {
-            first_day: "sun",
-            weekend_start: "sat",
-            weekend_end: "sun",
-        },
-    ),
+    ("001", WeekData { first_day: "mon", weekend_start: "sat", weekend_end: "sun" }),
+    ("DK", WeekData { first_day: "mon", weekend_start: "sat", weekend_end: "sun" }),
+    ("IT", WeekData { first_day: "mon", weekend_start: "sat", weekend_end: "sun" }),
+    ("US", WeekData { first_day: "sun", weekend_start: "sat", weekend_end: "sun" }),
 ];
 
 /// The zones in common use in a region, sorted: what 15.5.13 step 3 asks for.
@@ -262,10 +192,7 @@ mod tests {
             assert!(week_data_row(region).is_some(), "no week data for {region}");
         }
 
-        assert_eq!(
-            calendar_preference_row("en", ROOT_REGION).unwrap(),
-            &["gregorian"][..]
-        );
+        assert_eq!(calendar_preference_row("en", ROOT_REGION).unwrap(), &["gregorian"][..]);
 
         // A region the build says nothing about has no row of its own, which is what makes the
         // caller read `001` instead: the world's hour cycles, and no zones.

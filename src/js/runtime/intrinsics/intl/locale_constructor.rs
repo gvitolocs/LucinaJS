@@ -11,6 +11,7 @@
 //! is [`LOCALE_EXTENSION_KEYS`](super::locale_object::LOCALE_EXTENSION_KEYS), the list the
 //! constructor reads.
 
+use super::locale_object::LocaleObject;
 use crate::runtime::{
     Context, Handle, Realm,
     alloc_error::AllocResult,
@@ -20,8 +21,6 @@ use crate::runtime::{
     object_value::ObjectValue,
 };
 use crate::runtime_fn;
-
-use super::locale_object::LocaleObject;
 
 /// %Intl.Locale% (https://tc39.es/ecma402/#sec-intl-locale-constructor), 15.1.
 pub struct LocaleConstructor;

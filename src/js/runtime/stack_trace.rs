@@ -273,14 +273,18 @@ pub fn describe_stack_frames(
 }
 
 /// Capture up to `max_frames` frames of the current stack, newest first (0 means all).
-pub fn capture_current_stack(cx: Context, max_frames: usize) -> AllocResult<Vec<CapturedStackFrame>> {
+pub fn capture_current_stack(
+    cx: Context,
+    max_frames: usize,
+) -> AllocResult<Vec<CapturedStackFrame>> {
     handle_scope_guard!(cx);
 
     if cx.vm.as_ref().is_none_or(|vm| vm.is_stack_empty()) {
         return Ok(vec![]);
     }
 
-    let stack_frame_info = create_current_stack_frame_info(cx, /* skip_current_frame */ false)?;
+    let stack_frame_info =
+        create_current_stack_frame_info(cx, /* skip_current_frame */ false)?;
     describe_stack_frames(cx, stack_frame_info.to_handle(), max_frames)
 }
 

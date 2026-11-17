@@ -2,6 +2,10 @@
 //! `supportedLocalesOf`. The reading of the options and the rendering are the object file's; this
 //! file only decides which of them a program reaches and with what `required` and `defaults`.
 
+use super::date_time_format_object::{DateTimeFormatObject, Defaults, Required};
+use super::intl_object::canonicalize_locale_list_argument;
+use super::locale_negotiation::{Matcher, supported_locales_of};
+use super::options::{coerce_options_to_object, get_name_option};
 use crate::runtime::{
     Context, Handle, Realm,
     abstract_operations::{define_property_or_throw, ordinary_has_instance},
@@ -13,11 +17,6 @@ use crate::runtime::{
     property_descriptor::PropertyDescriptor,
 };
 use crate::{intrinsic_methods, runtime_fn};
-
-use super::date_time_format_object::{DateTimeFormatObject, Defaults, Required};
-use super::intl_object::canonicalize_locale_list_argument;
-use super::locale_negotiation::{Matcher, supported_locales_of};
-use super::options::{coerce_options_to_object, get_name_option};
 
 /// %Intl.DateTimeFormat% (https://tc39.es/ecma402/#sec-intl-datetimeformat-constructor), 11.1.
 pub struct DateTimeFormatConstructor;
@@ -81,7 +80,8 @@ impl DateTimeFormatConstructor {
         if cx.current_new_target().is_none()
             && ordinary_has_instance(
                 cx,
-                cx.get_intrinsic(Intrinsic::DateTimeFormatConstructor).into(),
+                cx.get_intrinsic(Intrinsic::DateTimeFormatConstructor)
+                    .into(),
                 this_value,
             )?
         {
@@ -126,7 +126,11 @@ impl DateTimeFormatConstructor {
 
         let supported = supported_locales_of(
             &requested_locales,
-            if matcher == "lookup" { Matcher::Lookup } else { Matcher::BestFit },
+            if matcher == "lookup" {
+                Matcher::Lookup
+            } else {
+                Matcher::BestFit
+            },
         );
 
         // 9.2.9 step 5: CreateArrayFromList, in the order the caller asked and with the tags as the

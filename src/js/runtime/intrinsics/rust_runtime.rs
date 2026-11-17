@@ -50,9 +50,9 @@ use crate::{
                 number_format_constructor::NumberFormatConstructor,
                 number_format_prototype::{self, NumberFormatPrototype},
                 plural_rules_constructor::PluralRulesConstructor,
+                plural_rules_prototype::PluralRulesPrototype,
                 relative_time_format_constructor::RelativeTimeFormatConstructor,
                 relative_time_format_prototype::RelativeTimeFormatPrototype,
-                plural_rules_prototype::PluralRulesPrototype,
                 segment_iterator_object::SegmentIteratorPrototype,
                 segmenter_constructor::SegmenterConstructor,
                 segmenter_prototype::SegmenterPrototype,
@@ -300,10 +300,7 @@ rust_runtime_functions!(
     (BigIntConstructor_construct, BigIntConstructor::construct),
     (BigIntConstructor_as_int_n, BigIntConstructor::as_int_n),
     (BigIntConstructor_as_uint_n, BigIntConstructor::as_uint_n),
-    (
-        BigIntPrototype_to_locale_string,
-        BigIntPrototype::to_locale_string
-    ),
+    (BigIntPrototype_to_locale_string, BigIntPrototype::to_locale_string),
     (BigIntPrototype_to_string, BigIntPrototype::to_string),
     (BigIntPrototype_value_of, BigIntPrototype::value_of),
     (BigUInt64ArrayConstructor_construct, BigUInt64ArrayConstructor::construct),
@@ -312,7 +309,10 @@ rust_runtime_functions!(
     (BooleanPrototype_value_of, BooleanPrototype::value_of),
     (BoundFunctionObject_call, BoundFunctionObject::call),
     (CollatorConstructor_construct, CollatorConstructor::construct),
-    (CollatorConstructor_supported_locales_of, CollatorConstructor::supported_locales_of),
+    (
+        CollatorConstructor_supported_locales_of,
+        CollatorConstructor::supported_locales_of
+    ),
     (CollatorPrototype_compare, CollatorPrototype::compare),
     (collator_prototype_compare_closure, collator_prototype::compare_closure),
     (CollatorPrototype_resolved_options, CollatorPrototype::resolved_options),
@@ -343,7 +343,10 @@ rust_runtime_functions!(
     (DataViewPrototype_set_uint16, DataViewPrototype::set_uint16),
     (DataViewPrototype_set_uint32, DataViewPrototype::set_uint32),
     (DisplayNamesConstructor_construct, DisplayNamesConstructor::construct),
-    (DisplayNamesConstructor_supported_locales_of, DisplayNamesConstructor::supported_locales_of),
+    (
+        DisplayNamesConstructor_supported_locales_of,
+        DisplayNamesConstructor::supported_locales_of
+    ),
     (DisplayNamesPrototype_of, DisplayNamesPrototype::of),
     (DisplayNamesPrototype_resolved_options, DisplayNamesPrototype::resolved_options),
     (DateConstructor_construct, DateConstructor::construct),
@@ -397,18 +400,12 @@ rust_runtime_functions!(
     (DatePrototype_to_time_string, DatePrototype::to_time_string),
     (DatePrototype_to_utc_string, DatePrototype::to_utc_string),
     (DatePrototype_value_of, DatePrototype::value_of),
-    (
-        DateTimeFormatConstructor_construct,
-        DateTimeFormatConstructor::construct
-    ),
+    (DateTimeFormatConstructor_construct, DateTimeFormatConstructor::construct),
     (
         DateTimeFormatConstructor_supported_locales_of,
         DateTimeFormatConstructor::supported_locales_of
     ),
-    (
-        DateTimeFormatPrototype_format_range,
-        DateTimeFormatPrototype::format_range
-    ),
+    (DateTimeFormatPrototype_format_range, DateTimeFormatPrototype::format_range),
     (
         DateTimeFormatPrototype_format_range_to_parts,
         DateTimeFormatPrototype::format_range_to_parts
@@ -534,33 +531,15 @@ rust_runtime_functions!(
     (ListFormatPrototype_format_to_parts, ListFormatPrototype::format_to_parts),
     (ListFormatPrototype_resolved_options, ListFormatPrototype::resolved_options),
     (LocaleConstructor_construct, LocaleConstructor::construct),
-    (
-        LocalePrototype_base_name,
-        LocalePrototype::base_name
-    ),
+    (LocalePrototype_base_name, LocalePrototype::base_name),
     (LocalePrototype_calendar, LocalePrototype::calendar),
     (LocalePrototype_case_first, LocalePrototype::case_first),
     (LocalePrototype_collation, LocalePrototype::collation),
-    (
-        LocalePrototype_first_day_of_week,
-        LocalePrototype::first_day_of_week
-    ),
-    (
-        LocalePrototype_get_calendars,
-        LocalePrototype::get_calendars
-    ),
-    (
-        LocalePrototype_get_collations,
-        LocalePrototype::get_collations
-    ),
-    (
-        LocalePrototype_get_hour_cycles,
-        LocalePrototype::get_hour_cycles
-    ),
-    (
-        LocalePrototype_get_numbering_systems,
-        LocalePrototype::get_numbering_systems
-    ),
+    (LocalePrototype_first_day_of_week, LocalePrototype::first_day_of_week),
+    (LocalePrototype_get_calendars, LocalePrototype::get_calendars),
+    (LocalePrototype_get_collations, LocalePrototype::get_collations),
+    (LocalePrototype_get_hour_cycles, LocalePrototype::get_hour_cycles),
+    (LocalePrototype_get_numbering_systems, LocalePrototype::get_numbering_systems),
     (LocalePrototype_get_text_info, LocalePrototype::get_text_info),
     (LocalePrototype_get_time_zones, LocalePrototype::get_time_zones),
     (LocalePrototype_get_week_info, LocalePrototype::get_week_info),
@@ -568,10 +547,7 @@ rust_runtime_functions!(
     (LocalePrototype_language, LocalePrototype::language),
     (LocalePrototype_maximize, LocalePrototype::maximize),
     (LocalePrototype_minimize, LocalePrototype::minimize),
-    (
-        LocalePrototype_numbering_system,
-        LocalePrototype::numbering_system
-    ),
+    (LocalePrototype_numbering_system, LocalePrototype::numbering_system),
     (LocalePrototype_numeric, LocalePrototype::numeric),
     (LocalePrototype_region, LocalePrototype::region),
     (LocalePrototype_script, LocalePrototype::script),

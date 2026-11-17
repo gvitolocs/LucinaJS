@@ -34,7 +34,6 @@ use crate::{
             constant_table::ConstantTable,
             function::{BytecodeFunction, ClosureObject},
             generator::BytecodeScript,
-            lazy::ensure_generated,
             instruction::{
                 AddImmInstruction, AddInstruction, AsyncIteratorCloseFinishInstruction,
                 AsyncIteratorCloseStartInstruction, AwaitInstruction, BitAndImmInstruction,
@@ -67,20 +66,20 @@ use crate::{
                 JumpTrueConstantInstruction, JumpTrueInstruction, LessThanInstruction,
                 LessThanOrEqualInstruction, LoadConstantInstruction, LoadDynamicInstruction,
                 LoadDynamicOrUnresolvedInstruction, LoadDynamicRefInstruction,
-                LoadEmptyInstruction, LoadFalseInstruction,
-                LoadFromModuleInstruction, LoadFromScopeInstruction, LoadGlobalInstruction,
-                LoadGlobalOrUnresolvedInstruction, LoadImmediateInstruction, LoadNullInstruction,
-                LoadTrueInstruction, LoadUndefinedInstruction, LogNotInstruction,
-                LooseEqualInstruction, LooseNotEqualInstruction, MakeDynamicRefInstruction,
-                MovInstruction, MulImmInstruction,
-                MulInstruction, NegInstruction, NewAccessorInstruction, NewArrayInstruction,
-                NewAsyncClosureInstruction, NewAsyncGeneratorInstruction, NewClassInstruction,
-                NewClosureInstruction, NewForInIteratorInstruction, NewGeneratorInstruction,
-                NewMappedArgumentsInstruction, NewObjectInstruction, NewPrivateSymbolInstruction,
-                NewPromiseInstruction, NewRegExpInstruction, NewUnmappedArgumentsInstruction,
-                OpCode, PopScopeInstruction, PushFunctionScopeInstruction,
-                PushLexicalScopeInstruction, PushWithScopeInstruction, RejectPromiseInstruction,
-                RemImmInstruction, RemInstruction, ResolvePromiseInstruction,
+                LoadEmptyInstruction, LoadFalseInstruction, LoadFromModuleInstruction,
+                LoadFromScopeInstruction, LoadGlobalInstruction, LoadGlobalOrUnresolvedInstruction,
+                LoadImmediateInstruction, LoadNullInstruction, LoadTrueInstruction,
+                LoadUndefinedInstruction, LogNotInstruction, LooseEqualInstruction,
+                LooseNotEqualInstruction, MakeDynamicRefInstruction, MovInstruction,
+                MulImmInstruction, MulInstruction, NegInstruction, NewAccessorInstruction,
+                NewArrayInstruction, NewAsyncClosureInstruction, NewAsyncGeneratorInstruction,
+                NewClassInstruction, NewClosureInstruction, NewForInIteratorInstruction,
+                NewGeneratorInstruction, NewMappedArgumentsInstruction, NewObjectInstruction,
+                NewPrivateSymbolInstruction, NewPromiseInstruction, NewRegExpInstruction,
+                NewUnmappedArgumentsInstruction, OpCode, PopScopeInstruction,
+                PushFunctionScopeInstruction, PushLexicalScopeInstruction,
+                PushWithScopeInstruction, RejectPromiseInstruction, RemImmInstruction,
+                RemInstruction, ResolvePromiseInstruction, ResolvePropertyKeyInstruction,
                 RestParameterInstruction, RetInstruction, RethrowInstruction,
                 SetArrayPropertyInstruction, SetNamedPropertyInstruction,
                 SetPrivatePropertyInstruction, SetPropertyInstruction, SetPrototypeOfInstruction,
@@ -88,12 +87,11 @@ use crate::{
                 ShiftRightArithmeticImmInstruction, ShiftRightArithmeticInstruction,
                 ShiftRightLogicalImmInstruction, ShiftRightLogicalInstruction,
                 StoreDynamicInstruction, StoreGlobalInstruction, StoreToDynamicRefInstruction,
-                StoreToModuleInstruction,
-                StoreVarDynamicInstruction, StoreToScopeInstruction, StrictEqualInstruction, StrictNotEqualInstruction,
-                SubImmInstruction, SubInstruction, ThrowInstruction, ThrowNewErrorInstruction,
-                ThrowNewErrorKind, ToNumberInstruction, ToNumericInstruction, ToObjectInstruction,
-                ResolvePropertyKeyInstruction, ToPropertyKeyInstruction, ToStringInstruction,
-                TypeOfInstruction, YieldInstruction,
+                StoreToModuleInstruction, StoreToScopeInstruction, StoreVarDynamicInstruction,
+                StrictEqualInstruction, StrictNotEqualInstruction, SubImmInstruction,
+                SubInstruction, ThrowInstruction, ThrowNewErrorInstruction, ThrowNewErrorKind,
+                ToNumberInstruction, ToNumericInstruction, ToObjectInstruction,
+                ToPropertyKeyInstruction, ToStringInstruction, TypeOfInstruction, YieldInstruction,
                 extra_wide_prefix_index_to_opcode_index, wide_prefix_index_to_opcode_index,
             },
             instruction_traits::{
@@ -103,14 +101,17 @@ use crate::{
                 GenericJumpToBooleanConstantInstruction, GenericJumpToBooleanInstruction,
                 GenericJumpUndefinedConstantInstruction, GenericJumpUndefinedInstruction,
             },
+            lazy::ensure_generated,
             operand::{CacheIndex, ConstantIndex, Register, SInt, UInt},
             stack_frame::{FIRST_ARGUMENT_SLOT_INDEX, NUM_STACK_SLOTS, StackFrame, StackSlotValue},
             width::{ExtraWide, Narrow, SignedWidthRepr, UnsignedWidthRepr, Wide, Width},
         },
         class_names::{ClassNames, new_class},
+        embed::{self, HostObject},
         error::{
             err_access_before_initialization, err_assign_constant, err_cannot_set_property,
-            err_not_defined, reference_error, stack_overflow_error, too_much_recursion_error, type_error, type_error_value,
+            err_not_defined, reference_error, stack_overflow_error, too_much_recursion_error,
+            type_error, type_error_value,
         },
         eval::{
             eval::perform_eval,
@@ -143,7 +144,6 @@ use crate::{
         ordinary_object::{ObjectBuilder, init_object_fields},
         promise_object::{PromiseObject, coerce_to_ordinary_promise, resolve},
         property::{DEFAULT_ACCESSOR_PROPERTY_FLAGS, Property},
-        embed::{self, HostObject},
         proxy_object::ProxyObject,
         regexp::compiled_regexp::CompiledRegExp,
         scope::{Scope, ScopeKind},
@@ -2793,7 +2793,9 @@ impl VM {
             CallableObject::Closure(closure) => closure,
             CallableObject::Exotic(object) => {
                 return handle_scope!(self.cx(), {
-                    object.to_handle().call_virtual(self.cx(), receiver, arguments)
+                    object
+                        .to_handle()
+                        .call_virtual(self.cx(), receiver, arguments)
                 });
             }
             CallableObject::Error(error) => return eval_err!(error),
@@ -2860,8 +2862,9 @@ impl VM {
     ) -> EvalResult<Handle<ObjectValue>> {
         handle_scope!(self.cx(), {
             // Check whether the value is a constructor, potentially deferring to proxy.
-            let closure_handle =
-                match self.check_value_is_constructor(*function, CalleeOrigin::Runtime)? {
+            let closure_handle = match self
+                .check_value_is_constructor(*function, CalleeOrigin::Runtime)?
+            {
                 CallableObject::Closure(closure) => closure.to_handle(),
                 // Proxy constructors call directly into the Rust runtime
                 CallableObject::Exotic(object) => {
@@ -2963,15 +2966,15 @@ impl VM {
         // Check whether the value is callable, potentially deferring to proxy.
         let mut closure_ptr =
             match self.check_value_is_callable(function_value, CalleeOrigin::Bytecode)? {
-            CallableObject::Closure(closure) => closure,
-            CallableObject::Exotic(object) => {
-                self.execute_generic_call_proxy(object, receiver, args, return_value_address)?;
+                CallableObject::Closure(closure) => closure,
+                CallableObject::Exotic(object) => {
+                    self.execute_generic_call_proxy(object, receiver, args, return_value_address)?;
 
-                // Reload PC after calling into the runtime
-                return Ok(self.published_pc());
-            }
-            CallableObject::Error(error) => return eval_err!(error),
-        };
+                    // Reload PC after calling into the runtime
+                    return Ok(self.published_pc());
+                }
+                CallableObject::Error(error) => return eval_err!(error),
+            };
 
         // Generate the bytecode of a lazy function on its first call. This may allocate, so the
         // receiver is read again from its register afterwards. The instruction itself must not be
@@ -3032,7 +3035,9 @@ impl VM {
             // Can default to undefined receiver, which will be eventually coerced by callee
             let receiver = receiver.unwrap_or(Value::undefined()).to_handle(self.cx());
             let arguments = self.prepare_proxy_call_args(args);
-            let return_value = object.to_handle().call_virtual(self.cx(), receiver, &arguments)?;
+            let return_value = object
+                .to_handle()
+                .call_virtual(self.cx(), receiver, &arguments)?;
             unsafe { *return_value_address = *return_value };
 
             Ok(())
@@ -3161,23 +3166,24 @@ impl VM {
         // Check whether the value is a constructor, potentially deferring to proxy.
         let mut closure_ptr =
             match self.check_value_is_constructor(function_value, CalleeOrigin::Bytecode)? {
-            CallableObject::Closure(closure) => closure,
-            // Proxy constructors call into the Rust runtime
-            CallableObject::Exotic(object) => {
-                return handle_scope!(self.cx(), {
-                    let object = object.to_handle();
-                    let new_target = new_target.to_handle();
-                    let arguments = self.prepare_proxy_call_args(args);
-                    let return_value = object.construct_virtual(self.cx(), &arguments, new_target)?;
+                CallableObject::Closure(closure) => closure,
+                // Proxy constructors call into the Rust runtime
+                CallableObject::Exotic(object) => {
+                    return handle_scope!(self.cx(), {
+                        let object = object.to_handle();
+                        let new_target = new_target.to_handle();
+                        let arguments = self.prepare_proxy_call_args(args);
+                        let return_value =
+                            object.construct_virtual(self.cx(), &arguments, new_target)?;
 
-                    // Can directly return value as proxy constructor is guaranteed to return an object
-                    unsafe { *return_value_address = *return_value.as_value() };
+                        // Can directly return value as proxy constructor is guaranteed to return an object
+                        unsafe { *return_value_address = *return_value.as_value() };
 
-                    Ok(())
-                });
-            }
-            CallableObject::Error(error) => return eval_err!(error),
-        };
+                        Ok(())
+                    });
+                }
+                CallableObject::Error(error) => return eval_err!(error),
+            };
 
         // Generate the bytecode of a lazy function on its first call. This may allocate, so the
         // new target is read again from its register afterwards. The instruction itself must not
@@ -5990,11 +5996,8 @@ impl VM {
             let is_strict = self.closure().function_ptr().is_strict();
 
             // May allocate
-            let mut coerced_receiver = to_object_setting(
-                self.cx(),
-                receiver,
-                property_key.as_string().as_value(),
-            )?;
+            let mut coerced_receiver =
+                to_object_setting(self.cx(), receiver, property_key.as_string().as_value())?;
 
             // The shape before the store is needed for the cache
             let old_shape = if fill_cache {
@@ -7145,7 +7148,9 @@ impl VM {
             // The referencing module, if this code is in a module
             let top_scope = self.top_scope();
             let referrer = if top_scope.kind() == ScopeKind::Module {
-                top_scope.module_scope_module().map(|module| module.to_handle())
+                top_scope
+                    .module_scope_module()
+                    .map(|module| module.to_handle())
             } else {
                 None
             };

@@ -145,11 +145,11 @@ pub fn compile_script(
         };
 
         let parse_start = Instant::now();
-        let program = match ParsedProgram::parse(source, cx.options.clone(), /* is_module */ false)
-        {
-            Ok(program) => Rc::new(program),
-            Err(error) => return syntax_parse_error(cx, &error),
-        };
+        let program =
+            match ParsedProgram::parse(source, cx.options.clone(), /* is_module */ false) {
+                Ok(program) => Rc::new(program),
+                Err(error) => return syntax_parse_error(cx, &error),
+            };
         let parse = parse_start.elapsed();
 
         let generate_start = Instant::now();
@@ -161,10 +161,7 @@ pub fn compile_script(
 
 /// Run a compiled script in its realm and return its completion value. Can be called any number
 /// of times; each run declares the script's globals again, like re-running the same source.
-pub fn execute_compiled(
-    cx: Context,
-    script: Handle<CompiledScript>,
-) -> EvalResult<Handle<Value>> {
+pub fn execute_compiled(cx: Context, script: Handle<CompiledScript>) -> EvalResult<Handle<Value>> {
     let realm = script.realm();
     // The VM drops the AST of the script's program once it has run (`VM::execute_script`)
     with_realm(cx, realm, |mut cx| cx.vm().execute_script(script.bytecode_script()))

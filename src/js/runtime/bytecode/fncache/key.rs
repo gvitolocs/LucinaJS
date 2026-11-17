@@ -10,13 +10,13 @@
 //! (global/dynamic lookup, or scope hops and slot index, or captured this/arguments/new.target/home
 //! object), plus the function's own scope tree structure.
 
-use rustc_hash::FxHashMap;
-use siphasher::sip128::{Hasher128, SipHasher13};
 use std::hash::Hasher;
-
-use super::secret::KeySecret;
 use std::rc::Rc;
 
+use rustc_hash::FxHashMap;
+use siphasher::sip128::{Hasher128, SipHasher13};
+
+use super::secret::KeySecret;
 use crate::{
     common::wtf_8::{Wtf8Str, Wtf8String},
     parser::{
@@ -24,14 +24,13 @@ use crate::{
         ast_visitor::*,
         loc::{Loc, Pos},
         scope_tree::{
-            AstScopeNode, Binding, BindingKind, ScopeNodeKind, ScopeTree, VMLocation,
-            ARGUMENTS_NAME, DERIVED_CONSTRUCTOR_BINDING_NAME, HOME_OBJECT_BINDING_NAME,
-            NEW_TARGET_BINDING_NAME, STATIC_HOME_OBJECT_BINDING_NAME, THIS_NAME,
+            ARGUMENTS_NAME, AstScopeNode, Binding, BindingKind, DERIVED_CONSTRUCTOR_BINDING_NAME,
+            HOME_OBJECT_BINDING_NAME, NEW_TARGET_BINDING_NAME, STATIC_HOME_OBJECT_BINDING_NAME,
+            ScopeNodeKind, ScopeTree, THIS_NAME, VMLocation,
         },
     },
     runtime::bytecode::generator::ScopeStackNode,
 };
-
 
 /// Number of independently hashed sections of a key.
 pub const KEY_SECTIONS: usize = 4;
@@ -323,25 +322,26 @@ impl<'a> Walk<'a> {
     pub fn anchored_pos(&self, pos: Pos) -> Option<(u32, u32)> {
         let map = self.pos_map.get_or_init(|| {
             let mut map: FxHashMap<Pos, (u32, u32)> = FxHashMap::default();
-            let record = |map: &mut FxHashMap<Pos, (u32, u32)>, pos: Pos, ordinal: u32, anchored: u32| {
-                if pos == crate::parser::loc::NO_POS {
-                    return;
-                }
-                // Prefer the innermost (smallest) node when several nodes share a position.
-                let replace = match map.get(&pos) {
-                    Some((old, _)) => {
-                        let len = |o: u32| {
-                            let loc = self.nodes[o as usize].loc;
-                            loc.end - loc.start
-                        };
-                        len(ordinal) < len(*old)
+            let record =
+                |map: &mut FxHashMap<Pos, (u32, u32)>, pos: Pos, ordinal: u32, anchored: u32| {
+                    if pos == crate::parser::loc::NO_POS {
+                        return;
                     }
-                    None => true,
+                    // Prefer the innermost (smallest) node when several nodes share a position.
+                    let replace = match map.get(&pos) {
+                        Some((old, _)) => {
+                            let len = |o: u32| {
+                                let loc = self.nodes[o as usize].loc;
+                                loc.end - loc.start
+                            };
+                            len(ordinal) < len(*old)
+                        }
+                        None => true,
+                    };
+                    if replace {
+                        map.insert(pos, (ordinal, anchored));
+                    }
                 };
-                if replace {
-                    map.insert(pos, (ordinal, anchored));
-                }
-            };
             for (ordinal, node) in self.nodes.iter().enumerate() {
                 record(&mut map, node.loc.start, ordinal as u32, 0);
                 if node.loc.end > node.loc.start {
@@ -461,7 +461,10 @@ impl<'a> KeyWalker<'a> {
 
     /// The ordinal of an AST node, if it was visited.
     fn ordinal_of(&self, ptr: *const u8) -> Option<u32> {
-        self.nodes.iter().rposition(|n| n.ptr == ptr).map(|i| i as u32)
+        self.nodes
+            .iter()
+            .rposition(|n| n.ptr == ptr)
+            .map(|i| i as u32)
     }
 
     #[inline]
@@ -568,7 +571,10 @@ impl<'a> KeyWalker<'a> {
         let nodes = &self.nodes;
         let before = |x: u32, y: u32| {
             let (lx, ly) = (nodes[x as usize].loc, nodes[y as usize].loc);
-            lx.start.cmp(&ly.start).then(ly.end.cmp(&lx.end)).then(x.cmp(&y))
+            lx.start
+                .cmp(&ly.start)
+                .then(ly.end.cmp(&lx.end))
+                .then(x.cmp(&y))
         };
         // Nodes are visited in source order for almost every function.
         if !order.windows(2).all(|w| before(w[0], w[1]).is_le()) {
@@ -634,7 +640,8 @@ impl<'a> KeyWalker<'a> {
                 let gap = pos - self.nodes[ordinal as usize].loc.end;
                 self.u32(1);
                 self.u64(gap as u64);
-                self.extra_anchors.push((pos, ordinal, POS_FROM_END | gap as u32));
+                self.extra_anchors
+                    .push((pos, ordinal, POS_FROM_END | gap as u32));
             } else {
                 let ordinal = order[0];
                 let gap = pos.saturating_sub(self.nodes[ordinal as usize].loc.start);
@@ -948,7 +955,11 @@ impl<'a> KeyWalker<'a> {
         }
 
         // Extra var names, sorted by symbol for determinism.
-        let mut syms: Vec<u32> = node.extra_var_names().iter().map(|n| self.symbol(n)).collect();
+        let mut syms: Vec<u32> = node
+            .extra_var_names()
+            .iter()
+            .map(|n| self.symbol(n))
+            .collect();
         syms.sort_unstable();
         self.usize(syms.len());
         for sym in syms {
@@ -981,8 +992,11 @@ impl<'a> KeyWalker<'a> {
         match &func.id {
             Some(id) => {
                 self.u8(1);
-                let id_ordinal =
-                    self.ordinal(id.as_ref() as *const ast::Identifier as *const u8, id.loc, NodeKind::Identifier);
+                let id_ordinal = self.ordinal(
+                    id.as_ref() as *const ast::Identifier as *const u8,
+                    id.loc,
+                    NodeKind::Identifier,
+                );
                 self.hash_symbol_node(id.name, id_ordinal);
                 self.identifier_names.push((id_ordinal, id.name));
             }
@@ -1342,7 +1356,13 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         default_visit_outer_expression(self, expr);
     }
 
-    walk_node!(visit_variable_declaration, TAG_VAR_DECL, ast::VariableDeclaration<'a>, default_visit_variable_declaration, NodeKind::Other);
+    walk_node!(
+        visit_variable_declaration,
+        TAG_VAR_DECL,
+        ast::VariableDeclaration<'a>,
+        default_visit_variable_declaration,
+        NodeKind::Other
+    );
 
     fn visit_variable_declarator(&mut self, decl: &mut ast::VariableDeclarator<'a>) {
         self.tag(TAG_VAR_DECLARATOR);
@@ -1411,8 +1431,11 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         match &class.id {
             Some(id) => {
                 self.u8(1);
-                let id_ordinal =
-                    self.ordinal(id.as_ref() as *const ast::Identifier as *const u8, id.loc, NodeKind::Identifier);
+                let id_ordinal = self.ordinal(
+                    id.as_ref() as *const ast::Identifier as *const u8,
+                    id.loc,
+                    NodeKind::Identifier,
+                );
                 self.hash_symbol_node(id.name, id_ordinal);
                 self.identifier_names.push((id_ordinal, id.name));
             }
@@ -1462,8 +1485,11 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         // The key is evaluated inline in the parent for computed keys; named keys are hashed too.
         self.visit_expression(&mut method.key);
         // The method's function is a nested function: placeholder with kind/flags only.
-        let func_ordinal =
-            self.ordinal(method.value.as_ref() as *const ast::Function as *const u8, method.value.loc, NodeKind::Function);
+        let func_ordinal = self.ordinal(
+            method.value.as_ref() as *const ast::Function as *const u8,
+            method.value.loc,
+            NodeKind::Function,
+        );
         self.u16(method.value.flags.bits());
         match &method.value.id {
             Some(id) => {
@@ -1477,9 +1503,7 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         if !method.is_computed {
             let key_ptr = match &method.key {
                 ast::Expression::Id(id) => id.as_ref() as *const ast::Identifier as *const u8,
-                ast::Expression::String(s) => {
-                    s.as_ref() as *const ast::StringLiteral as *const u8
-                }
+                ast::Expression::String(s) => s.as_ref() as *const ast::StringLiteral as *const u8,
                 _ => std::ptr::null(),
             };
             if !key_ptr.is_null() {
@@ -1517,9 +1541,21 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         default_visit_block(self, block);
     }
 
-    walk_node!(visit_expression_statement, TAG_EXPR_STMT, ast::ExpressionStatement<'a>, default_visit_expression_statement, NodeKind::Other);
+    walk_node!(
+        visit_expression_statement,
+        TAG_EXPR_STMT,
+        ast::ExpressionStatement<'a>,
+        default_visit_expression_statement,
+        NodeKind::Other
+    );
 
-    walk_node!(visit_if_statement, TAG_IF, ast::IfStatement<'a>, default_visit_if_statement, NodeKind::Other);
+    walk_node!(
+        visit_if_statement,
+        TAG_IF,
+        ast::IfStatement<'a>,
+        default_visit_if_statement,
+        NodeKind::Other
+    );
 
     fn visit_switch_statement(&mut self, stmt: &mut ast::SwitchStatement<'a>) {
         self.tag(TAG_SWITCH);
@@ -1529,7 +1565,13 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         default_visit_switch_statement(self, stmt);
     }
 
-    walk_node!(visit_switch_case, TAG_SWITCH_CASE, ast::SwitchCase<'a>, default_visit_switch_case, NodeKind::Other);
+    walk_node!(
+        visit_switch_case,
+        TAG_SWITCH_CASE,
+        ast::SwitchCase<'a>,
+        default_visit_switch_case,
+        NodeKind::Other
+    );
 
     fn visit_for_statement(&mut self, stmt: &mut ast::ForStatement<'a>) {
         self.tag(TAG_FOR);
@@ -1572,8 +1614,20 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         default_visit_for_each_init(self, init);
     }
 
-    walk_node!(visit_while_statement, TAG_WHILE, ast::WhileStatement<'a>, default_visit_while_statement, NodeKind::Other);
-    walk_node!(visit_do_while_statement, TAG_DO_WHILE, ast::DoWhileStatement<'a>, default_visit_do_while_statement, NodeKind::Other);
+    walk_node!(
+        visit_while_statement,
+        TAG_WHILE,
+        ast::WhileStatement<'a>,
+        default_visit_while_statement,
+        NodeKind::Other
+    );
+    walk_node!(
+        visit_do_while_statement,
+        TAG_DO_WHILE,
+        ast::DoWhileStatement<'a>,
+        default_visit_do_while_statement,
+        NodeKind::Other
+    );
 
     fn visit_with_statement(&mut self, stmt: &mut ast::WithStatement<'a>) {
         self.tag(TAG_WITH);
@@ -1582,7 +1636,13 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         default_visit_with_statement(self, stmt);
     }
 
-    walk_node!(visit_try_statement, TAG_TRY, ast::TryStatement<'a>, default_visit_try_statement, NodeKind::Other);
+    walk_node!(
+        visit_try_statement,
+        TAG_TRY,
+        ast::TryStatement<'a>,
+        default_visit_try_statement,
+        NodeKind::Other
+    );
 
     fn visit_catch_clause(&mut self, catch: &mut ast::CatchClause<'a>) {
         self.tag(TAG_CATCH);
@@ -1592,8 +1652,20 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         default_visit_catch_clause(self, catch);
     }
 
-    walk_node!(visit_throw_statement, TAG_THROW, ast::ThrowStatement<'a>, default_visit_throw_statement, NodeKind::Other);
-    walk_node!(visit_return_statement, TAG_RETURN, ast::ReturnStatement<'a>, default_visit_return_statement, NodeKind::Other);
+    walk_node!(
+        visit_throw_statement,
+        TAG_THROW,
+        ast::ThrowStatement<'a>,
+        default_visit_throw_statement,
+        NodeKind::Other
+    );
+    walk_node!(
+        visit_return_statement,
+        TAG_RETURN,
+        ast::ReturnStatement<'a>,
+        default_visit_return_statement,
+        NodeKind::Other
+    );
 
     fn visit_break_statement(&mut self, stmt: &mut ast::BreakStatement<'a>) {
         self.tag(TAG_BREAK);
@@ -1803,8 +1875,20 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         default_visit_member_expression(self, expr);
     }
 
-    walk_node!(visit_chain_expression, TAG_CHAIN, ast::ChainExpression<'a>, default_visit_chain_expression, NodeKind::Other);
-    walk_node!(visit_conditional_expression, TAG_CONDITIONAL, ast::ConditionalExpression<'a>, default_visit_conditional_expression, NodeKind::Other);
+    walk_node!(
+        visit_chain_expression,
+        TAG_CHAIN,
+        ast::ChainExpression<'a>,
+        default_visit_chain_expression,
+        NodeKind::Other
+    );
+    walk_node!(
+        visit_conditional_expression,
+        TAG_CONDITIONAL,
+        ast::ConditionalExpression<'a>,
+        default_visit_conditional_expression,
+        NodeKind::Other
+    );
 
     fn visit_call_expression(&mut self, expr: &mut ast::CallExpression<'a>) {
         self.tag(TAG_CALL);
@@ -1829,8 +1913,20 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         default_visit_call_argument(self, argument);
     }
 
-    walk_node!(visit_new_expression, TAG_NEW, ast::NewExpression<'a>, default_visit_new_expression, NodeKind::Other);
-    walk_node!(visit_sequence_expression, TAG_SEQUENCE, ast::SequenceExpression<'a>, default_visit_sequence_expression, NodeKind::Other);
+    walk_node!(
+        visit_new_expression,
+        TAG_NEW,
+        ast::NewExpression<'a>,
+        default_visit_new_expression,
+        NodeKind::Other
+    );
+    walk_node!(
+        visit_sequence_expression,
+        TAG_SEQUENCE,
+        ast::SequenceExpression<'a>,
+        default_visit_sequence_expression,
+        NodeKind::Other
+    );
 
     fn visit_this_expression(&mut self, expr: &mut ast::ThisExpression<'a>) {
         self.tag(TAG_THIS);
@@ -1860,7 +1956,13 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         }
     }
 
-    walk_node!(visit_spread_element, TAG_SPREAD, ast::SpreadElement<'a>, default_visit_spread_element, NodeKind::Other);
+    walk_node!(
+        visit_spread_element,
+        TAG_SPREAD,
+        ast::SpreadElement<'a>,
+        default_visit_spread_element,
+        NodeKind::Other
+    );
 
     fn visit_object_expression(&mut self, expr: &mut ast::ObjectExpression<'a>) {
         self.tag(TAG_OBJECT);
@@ -1904,8 +2006,10 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
                         ast::PropertyKind::Set => 2,
                         _ => 0,
                     };
-                    self.method_keys
-                        .insert(func.as_ref() as *const ast::Function as *const u8, (key_ordinal, prefix));
+                    self.method_keys.insert(
+                        func.as_ref() as *const ast::Function as *const u8,
+                        (key_ordinal, prefix),
+                    );
                 }
             }
         }
@@ -1924,7 +2028,13 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         self.visit_class(class);
     }
 
-    walk_node!(visit_await_expression, TAG_AWAIT, ast::AwaitExpression<'a>, default_visit_await_expression, NodeKind::Other);
+    walk_node!(
+        visit_await_expression,
+        TAG_AWAIT,
+        ast::AwaitExpression<'a>,
+        default_visit_await_expression,
+        NodeKind::Other
+    );
 
     fn visit_yield_expression(&mut self, expr: &mut ast::YieldExpression<'a>) {
         self.tag(TAG_YIELD);
@@ -1979,7 +2089,13 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         }
     }
 
-    walk_node!(visit_tagged_template_expression, TAG_TAGGED_TEMPLATE, ast::TaggedTemplateExpression<'a>, default_visit_tagged_template_expression, NodeKind::Other);
+    walk_node!(
+        visit_tagged_template_expression,
+        TAG_TAGGED_TEMPLATE,
+        ast::TaggedTemplateExpression<'a>,
+        default_visit_tagged_template_expression,
+        NodeKind::Other
+    );
 
     fn visit_meta_property(&mut self, expr: &mut ast::MetaProperty<'a>) {
         self.tag(TAG_META_PROPERTY);
@@ -1993,7 +2109,13 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         }
     }
 
-    walk_node!(visit_import_expression, TAG_IMPORT_EXPR, ast::ImportExpression<'a>, default_visit_import_expression, NodeKind::Other);
+    walk_node!(
+        visit_import_expression,
+        TAG_IMPORT_EXPR,
+        ast::ImportExpression<'a>,
+        default_visit_import_expression,
+        NodeKind::Other
+    );
 
     fn visit_identifier_pattern(&mut self, id: &mut ast::Identifier<'a>) {
         self.tag(TAG_ID_PATTERN);
@@ -2021,8 +2143,20 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         }
     }
 
-    walk_node!(visit_rest_element, TAG_REST, ast::RestElement<'a>, default_visit_rest_element, NodeKind::Other);
-    walk_node!(visit_object_pattern, TAG_OBJECT_PATTERN, ast::ObjectPattern<'a>, default_visit_object_pattern, NodeKind::Other);
+    walk_node!(
+        visit_rest_element,
+        TAG_REST,
+        ast::RestElement<'a>,
+        default_visit_rest_element,
+        NodeKind::Other
+    );
+    walk_node!(
+        visit_object_pattern,
+        TAG_OBJECT_PATTERN,
+        ast::ObjectPattern<'a>,
+        default_visit_object_pattern,
+        NodeKind::Other
+    );
 
     fn visit_object_pattern_property(&mut self, prop: &mut ast::ObjectPatternProperty<'a>) {
         self.tag(TAG_OBJECT_PATTERN_PROPERTY);
@@ -2032,7 +2166,13 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         default_visit_object_pattern_property(self, prop);
     }
 
-    walk_node!(visit_assignment_pattern, TAG_ASSIGN_PATTERN, ast::AssignmentPattern<'a>, default_visit_assignment_pattern, NodeKind::Other);
+    walk_node!(
+        visit_assignment_pattern,
+        TAG_ASSIGN_PATTERN,
+        ast::AssignmentPattern<'a>,
+        default_visit_assignment_pattern,
+        NodeKind::Other
+    );
 
     fn visit_identifier(&mut self, id: &mut ast::Identifier<'a>) {
         self.tag(TAG_IDENTIFIER);
@@ -2224,12 +2364,13 @@ pub(crate) fn walk_function<'a>(
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use super::*;
     use crate::common::options::OptionsBuilder;
     use crate::common::wtf_8::Wtf8String;
-    use crate::parser::source::Source;
     use crate::parser::ParsedProgram;
-    use std::rc::Rc;
+    use crate::parser::source::Source;
 
     const TEST_SECRET: KeySecret = [7; 16];
 
@@ -2243,8 +2384,10 @@ mod tests {
         for stmt in stmts {
             if let ast::Statement::FuncDecl(f) = *stmt {
                 let func = f.as_ref();
-                let chain: Vec<usize> =
-                    stack.iter().filter_map(|f| f.scope.as_ref().vm_scope_id()).collect();
+                let chain: Vec<usize> = stack
+                    .iter()
+                    .filter_map(|f| f.scope.as_ref().vm_scope_id())
+                    .collect();
                 out.push((func, chain));
                 stack.push(func);
                 if let ast::FunctionBody::Block(body) = func.body.as_ref() {
@@ -2285,7 +2428,10 @@ mod tests {
         let global_vm = program_ast.scope.as_ref().vm_scope_id().unwrap();
         let (func, enclosing) = found
             .iter()
-            .find(|(f, _)| f.id.as_ref().map_or(false, |id| id.name.as_bytes() == name.as_bytes()))
+            .find(|(f, _)| {
+                f.id.as_ref()
+                    .map_or(false, |id| id.name.as_bytes() == name.as_bytes())
+            })
             .unwrap_or_else(|| panic!("function {name} not found"));
 
         // Build the scope stack the generator would use: dummy root, global scope, then the

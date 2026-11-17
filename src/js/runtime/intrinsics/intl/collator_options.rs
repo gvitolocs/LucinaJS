@@ -77,13 +77,8 @@ pub fn resolve_collator(
     let given = coerce_options_to_object(cx, options)?;
 
     // Steps 7-8: [[Usage]].
-    let usage = Usage::parse(&text_option(
-        cx,
-        given,
-        cx.names.usage(),
-        &["sort", "search"],
-        "sort",
-    )?);
+    let usage =
+        Usage::parse(&text_option(cx, given, cx.names.usage(), &["sort", "search"], "sort")?);
 
     // Steps 9-10 pick the locale data table by the usage. The sort and the search table of this
     // build differ only in the sensitivity default, which is why those two are the constants above
@@ -189,13 +184,8 @@ pub fn resolve_collator(
 /// options object the same way. `best fit` is the default of both, and this build's best fit is its
 /// lookup (see `locale_negotiation::lookup_locale`), so the two answers resolve alike.
 pub fn locale_matcher(cx: Context, options: Handle<ObjectValue>) -> EvalResult<Matcher> {
-    if text_option(
-        cx,
-        options,
-        cx.names.locale_matcher(),
-        &["lookup", "best fit"],
-        "best fit",
-    )? == "lookup"
+    if text_option(cx, options, cx.names.locale_matcher(), &["lookup", "best fit"], "best fit")?
+        == "lookup"
     {
         Ok(Matcher::Lookup)
     } else {
@@ -302,8 +292,7 @@ mod tests {
     /// The same, for a call that is expected to throw.
     fn refuses(source: &str) {
         with_context(|cx| {
-            let options =
-                evaluate_script(cx, cx.initial_realm(), source, "options.js", 1).unwrap();
+            let options = evaluate_script(cx, cx.initial_realm(), source, "options.js", 1).unwrap();
             assert!(resolve_collator(cx, cx.undefined(), options).is_err(), "{source}");
         });
     }
@@ -345,8 +334,8 @@ mod tests {
 
             resolve_collator(cx, cx.undefined(), options).unwrap();
 
-            let order = evaluate_script(cx, cx.initial_realm(), "seen.join(',')", "order.js", 1)
-                .unwrap();
+            let order =
+                evaluate_script(cx, cx.initial_realm(), "seen.join(',')", "order.js", 1).unwrap();
             let expected = "usage,localeMatcher,collation,numeric,caseFirst,sensitivity,\
                             ignorePunctuation";
             assert!(order.as_string().flatten().unwrap().eq_str(expected));
@@ -382,12 +371,7 @@ mod tests {
 
     #[test]
     fn case_first_comes_out_of_the_tag_and_the_option_alike() {
-        assert_eq!(
-            resolved("'en-u-kf-upper'", "undefined")
-                .settings
-                .case_first,
-            CaseFirst::Upper
-        );
+        assert_eq!(resolved("'en-u-kf-upper'", "undefined").settings.case_first, CaseFirst::Upper);
         assert_eq!(
             resolved("undefined", "({ caseFirst: 'lower' })")
                 .settings
@@ -396,10 +380,7 @@ mod tests {
         );
 
         // The bare spelling of a key whose data holds no "true" is ignored (step 12.6.4).
-        assert_eq!(
-            resolved("'en-u-kf'", "undefined").settings.case_first,
-            CaseFirst::False
-        );
+        assert_eq!(resolved("'en-u-kf'", "undefined").settings.case_first, CaseFirst::False);
 
         // "false" is the request to leave it to the locale, which is what the comparison of
         // `a_false_case_first_leaves_the_locale_the_boss` checks.
@@ -427,11 +408,7 @@ mod tests {
             ("variant", Sensitivity::Variant),
         ] {
             let options = format!("({{ sensitivity: '{source}' }})");
-            assert_eq!(
-                resolved("undefined", &options).settings.sensitivity,
-                expected,
-                "{source}"
-            );
+            assert_eq!(resolved("undefined", &options).settings.sensitivity, expected, "{source}");
         }
 
         refuses("({ sensitivity: 'x' })");
@@ -455,14 +432,8 @@ mod tests {
     fn a_collation_this_build_has_no_data_for_leaves_the_default() {
         // "standard" is a real `type` and a real CLDR collation, but 10.2.3 forbids it as a value
         // of the locale data, so ResolveLocale step 12.11 refuses it and step 14 says "default".
-        assert_eq!(
-            resolved("undefined", "({ collation: 'standard' })").collation,
-            "default"
-        );
-        assert_eq!(
-            resolved("'en-u-co-standard'", "undefined").collation,
-            "default"
-        );
+        assert_eq!(resolved("undefined", "({ collation: 'standard' })").collation, "default");
+        assert_eq!(resolved("'en-u-co-standard'", "undefined").collation, "default");
     }
 
     #[test]
@@ -478,14 +449,8 @@ mod tests {
             refuses(source);
         }
 
-        assert_eq!(
-            resolved("undefined", "({ collation: 'abcdefgh' })").collation,
-            "default"
-        );
-        assert_eq!(
-            resolved("undefined", "({ collation: 'a23-b45' })").collation,
-            "default"
-        );
+        assert_eq!(resolved("undefined", "({ collation: 'abcdefgh' })").collation, "default");
+        assert_eq!(resolved("undefined", "({ collation: 'a23-b45' })").collation, "default");
     }
 
     #[test]

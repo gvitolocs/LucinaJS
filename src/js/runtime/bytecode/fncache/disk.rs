@@ -9,9 +9,9 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use super::disk_rules::{self, Lru};
@@ -53,7 +53,15 @@ pub const HEADER_LEN: usize = wire::HEADER_LEN;
 pub fn serialize_record(key: u128, partition: u128, template: &Template) -> Vec<u8> {
     let payload = template::serialize(template);
     let mut buf = Vec::with_capacity(HEADER_LEN + payload.len());
-    wire::write_header(&mut buf, MAGIC, FORMAT_VERSION, build_id(), key, partition, payload.len() as u32);
+    wire::write_header(
+        &mut buf,
+        MAGIC,
+        FORMAT_VERSION,
+        build_id(),
+        key,
+        partition,
+        payload.len() as u32,
+    );
     buf.extend_from_slice(&payload);
     buf
 }
@@ -175,7 +183,9 @@ impl DiskStore {
             for entry in read_dir.flatten() {
                 let name = entry.file_name();
                 let Some(name) = name.to_str() else { continue };
-                let Some(key) = key_from_file_name(name) else { continue };
+                let Some(key) = key_from_file_name(name) else {
+                    continue;
+                };
                 if let Ok(meta) = entry.metadata() {
                     let size = meta.len();
                     let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
@@ -199,7 +209,14 @@ impl DiskStore {
             .name("fncache-writer".to_string())
             .spawn(move || writer_thread(state, rx))
             .ok()?;
-        Some(DiskStore { dir, max_bytes, index: None, sender, thread: Some(thread), failed })
+        Some(DiskStore {
+            dir,
+            max_bytes,
+            index: None,
+            sender,
+            thread: Some(thread),
+            failed,
+        })
     }
 
     fn load_index(&mut self) {
@@ -286,8 +303,7 @@ mod tests {
     };
 
     fn temp_dir(name: &str) -> PathBuf {
-        let d = std::env::temp_dir()
-            .join(format!("fncache-test-{}-{name}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("fncache-test-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         d
     }
@@ -351,7 +367,9 @@ mod tests {
 
         // A second store over the same directory, like a second process.
         let mut store2 = DiskStore::new(dir.clone(), DEFAULT_MAX_BYTES).unwrap();
-        let loaded = store2.load(key, PARTITION).expect("template must load from disk");
+        let loaded = store2
+            .load(key, PARTITION)
+            .expect("template must load from disk");
         assert_eq!(loaded, template);
         drop(store2);
 
@@ -420,11 +438,21 @@ mod tests {
         let record = serialize_record(1, PARTITION, &template);
         assert_eq!(deserialize_record(&record, 1, PARTITION).as_ref(), Some(&template));
         // Another format version, another build id, another magic, a payload length that is not the rest: all refused.
-        for (at, len) in [(0usize, 4usize), (4, 4), (8, 8), (16, 16), (32, 16), (48, 4)] {
+        for (at, len) in [
+            (0usize, 4usize),
+            (4, 4),
+            (8, 8),
+            (16, 16),
+            (32, 16),
+            (48, 4),
+        ] {
             for i in at..at + len {
                 let mut other = record.clone();
                 other[i] ^= 1;
-                assert!(deserialize_record(&other, 1, PARTITION).is_none(), "byte {i} of the header changed but the record was accepted");
+                assert!(
+                    deserialize_record(&other, 1, PARTITION).is_none(),
+                    "byte {i} of the header changed but the record was accepted"
+                );
             }
         }
         // The key and the partition asked for must be the ones in the header.
@@ -494,7 +522,10 @@ mod tests {
 
         // The most recently stored key must still be present.
         let mut store = DiskStore::new(dir.clone(), max_bytes).unwrap();
-        assert!(store.load(num - 1, PARTITION).is_some(), "most recent key must survive eviction");
+        assert!(
+            store.load(num - 1, PARTITION).is_some(),
+            "most recent key must survive eviction"
+        );
         drop(store);
 
         fs::remove_dir_all(&dir).ok();

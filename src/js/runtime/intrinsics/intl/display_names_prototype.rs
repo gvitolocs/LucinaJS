@@ -5,6 +5,10 @@
 //! The instance, the reading of its options and the tables the names come out of are
 //! [`super::display_names_object`]; this file is only the two methods a program calls.
 
+use super::display_names_object::{
+    DisplayNamesFallback, DisplayNamesObject, DisplayNamesType, canonical_code_for_display_names,
+};
+use super::number_format_prototype::{report_str, report_value};
 use crate::runtime::{
     Context, Handle, Realm,
     alloc_error::AllocResult,
@@ -16,12 +20,6 @@ use crate::runtime::{
     to_string,
 };
 use crate::{intrinsic_methods, runtime_fn};
-
-use super::display_names_object::{
-    DisplayNamesFallback, DisplayNamesObject, DisplayNamesType,
-    canonical_code_for_display_names,
-};
-use super::number_format_prototype::{report_str, report_value};
 
 /// %Intl.DisplayNames.prototype%
 /// (https://tc39.es/ecma402/#sec-properties-of-the-intl-displaynames-prototype-object), 12.3.

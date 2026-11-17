@@ -18,6 +18,14 @@
 //! of this build contains both, so `LOCALE_EXTENSION_KEYS` is the full list of seven and neither
 //! getter is conditional.
 
+use super::collator_options::option_text;
+use super::intl_object::throw_locale_error;
+use super::locale_negotiation::{
+    canonicalize_locale_tag, language_subtag, locale_base_name, locale_language, locale_region,
+    locale_script, locale_variants, make_locale_record, region_subtag, script_subtag, type_value,
+    unicode_extension_value, variant_subtag, weekday_to_u_value,
+};
+use super::options::{OptionType, coerce_options_to_object, get_option};
 use crate::extend_object;
 use crate::runtime::{
     Context, Handle, PropertyKey, Value,
@@ -29,15 +37,6 @@ use crate::runtime::{
     ordinary_object::ObjectBuilder,
     to_string,
 };
-
-use super::collator_options::option_text;
-use super::intl_object::throw_locale_error;
-use super::locale_negotiation::{
-    canonicalize_locale_tag, language_subtag, locale_base_name, locale_language, locale_region,
-    locale_script, locale_variants, make_locale_record, region_subtag, script_subtag, type_value,
-    unicode_extension_value, variant_subtag, weekday_to_u_value,
-};
-use super::options::{OptionType, coerce_options_to_object, get_option};
 
 /// %Intl.Locale%.[[LocaleExtensionKeys]]
 /// (https://tc39.es/ecma402/#sec-properties-of-intl-locale-constructor), 15.2.2: the five keys the
@@ -77,10 +76,7 @@ impl LocaleObject {
 
     /// `? RequireInternalSlot(loc, [[InitializedLocale]])`, which every step 2 of 15.3's accessors and
     /// methods performs.
-    pub fn require_initialized(
-        cx: Context,
-        this_value: Handle<Value>,
-    ) -> EvalResult<Handle<Self>> {
+    pub fn require_initialized(cx: Context, this_value: Handle<Value>) -> EvalResult<Handle<Self>> {
         if !this_value.is_object() {
             return type_error(cx, "Intl.Locale method called on incompatible receiver");
         }
@@ -185,12 +181,7 @@ impl LocaleObject {
 
         let case_first = text_option(cx, options, cx.names.case_first(), None)?;
         if let Some(case_first) = &case_first {
-            check_one_of(
-                cx,
-                "caseFirst",
-                case_first,
-                &["upper", "lower", "false"],
-            )?;
+            check_one_of(cx, "caseFirst", case_first, &["upper", "lower", "false"])?;
         }
 
         // Steps 29 and 30: `numeric` is a Boolean option whose record value is the text of the
@@ -286,10 +277,7 @@ impl LocaleObject {
     /// [[Numeric]] (step 42): `true` for the record's "true" or for the empty String, `false` for any
     /// other value and also for no `kn` at all, which is step 42.2's "else".
     pub fn numeric(&self, cx: Context) -> EvalResult<bool> {
-        Ok(matches!(
-            self.extension_value(cx, "kn")?.as_deref(),
-            Some("true") | Some("")
-        ))
+        Ok(matches!(self.extension_value(cx, "kn")?.as_deref(), Some("true") | Some("")))
     }
 
     /// GetLocaleBaseName (https://tc39.es/ecma402/#sec-getlocalebasename), 15.5.1: [[Locale]] up to
@@ -384,10 +372,7 @@ fn check_one_of(cx: Context, option: &str, value: &str, allowed: &[&str]) -> Eva
     } else {
         range_error(
             cx,
-            &format!(
-                "Intl.Locale's '{option}' option must be one of: {}",
-                allowed.join(", ")
-            ),
+            &format!("Intl.Locale's '{option}' option must be one of: {}", allowed.join(", ")),
         )
     }
 }
@@ -398,11 +383,7 @@ fn check_one_of(cx: Context, option: &str, value: &str, allowed: &[&str]) -> Eva
 ///
 /// `tag` is already canonicalized (15.1.1 step 13), so a subtag this function takes from it needs no
 /// checking of its own; the checks of steps 3, 5.1, 7.1 and 9 are there for what a program wrote.
-fn update_language_id(
-    cx: Context,
-    tag: &str,
-    options: Handle<ObjectValue>,
-) -> EvalResult<String> {
+fn update_language_id(cx: Context, tag: &str, options: Handle<ObjectValue>) -> EvalResult<String> {
     // Step 1.
     let base_name = locale_base_name(tag);
 

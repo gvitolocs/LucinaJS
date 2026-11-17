@@ -80,7 +80,11 @@ pub struct LazyFunctions {
 
 impl LazyFunctions {
     /// Register a stub and return its id, stored in the stub.
-    pub(crate) fn insert(&mut self, stub: HeapPtr<BytecodeFunction>, info: LazyFunctionInfo) -> u32 {
+    pub(crate) fn insert(
+        &mut self,
+        stub: HeapPtr<BytecodeFunction>,
+        info: LazyFunctionInfo,
+    ) -> u32 {
         let entry = Some(LazyEntry { stub, info });
 
         let id = if let Some(id) = self.free_ids.pop() {
@@ -116,12 +120,18 @@ impl LazyFunctions {
 
     /// The compile statistics of the context so far.
     pub fn compile_stats(&self) -> CompileStats {
-        CompileStats { pending_stub_functions: self.num_pending() as u64, ..self.stats }
+        CompileStats {
+            pending_stub_functions: self.num_pending() as u64,
+            ..self.stats
+        }
     }
 
     /// Update the stub pointers after a GC moved the heap, dropping the entries of collected stubs.
     /// `resolve` returns the new location of a live item, or None if it was collected.
-    pub fn sweep(&mut self, resolve: impl Fn(HeapPtr<AnyHeapItem>) -> Option<HeapPtr<AnyHeapItem>>) {
+    pub fn sweep(
+        &mut self,
+        resolve: impl Fn(HeapPtr<AnyHeapItem>) -> Option<HeapPtr<AnyHeapItem>>,
+    ) {
         for (id, slot) in self.entries.iter_mut().enumerate() {
             if let Some(entry) = slot {
                 match resolve(entry.stub.cast()) {
@@ -135,7 +145,6 @@ impl LazyFunctions {
         }
     }
 
-
     /// The programs kept alive by pending stubs, each once, with the bytes of their parse arenas
     /// that trimming can free: the whole arena, or with `reparse` only programs that still have
     /// their AST, and only its bytes (the scope tree stays).
@@ -145,7 +154,11 @@ impl LazyFunctions {
             let program = entry.info.program();
             let ptr = std::rc::Rc::as_ptr(program);
             if !programs.iter().any(|(p, _)| *p == ptr) {
-                let bytes = if reparse { program.ast_arena_bytes() } else { program.arena_bytes() };
+                let bytes = if reparse {
+                    program.ast_arena_bytes()
+                } else {
+                    program.arena_bytes()
+                };
                 programs.push((ptr, bytes));
             }
         }
@@ -158,12 +171,18 @@ impl LazyFunctions {
     /// Bytes of the parse arenas that pending stubs keep alive and trimming can free (see
     /// `retained_programs`), each program counted once.
     pub fn retained_parse_bytes(&self) -> usize {
-        self.retained_programs(false).iter().map(|(_, bytes)| bytes).sum()
+        self.retained_programs(false)
+            .iter()
+            .map(|(_, bytes)| bytes)
+            .sum()
     }
 
     /// Like `retained_parse_bytes`, for a context that re-parses: only ASTs count.
     pub fn retained_ast_bytes(&self) -> usize {
-        self.retained_programs(true).iter().map(|(_, bytes)| bytes).sum()
+        self.retained_programs(true)
+            .iter()
+            .map(|(_, bytes)| bytes)
+            .sum()
     }
 
     /// Bytes of the scope tree arenas of programs with pending stubs.
@@ -225,7 +244,9 @@ impl LazyFunctions {
             .iter()
             .enumerate()
             .filter_map(|(id, slot)| match slot {
-                Some(entry) if std::rc::Rc::as_ptr(entry.info.program()) == program => Some(id as u32),
+                Some(entry) if std::rc::Rc::as_ptr(entry.info.program()) == program => {
+                    Some(id as u32)
+                }
                 _ => None,
             })
             .collect()
@@ -234,7 +255,9 @@ impl LazyFunctions {
     /// The stub registered under `id`, if it still belongs to `program`.
     fn stub_of(&self, id: u32, program: *const ParsedProgram) -> Option<HeapPtr<BytecodeFunction>> {
         match self.entries.get(id as usize) {
-            Some(Some(entry)) if std::rc::Rc::as_ptr(entry.info.program()) == program => Some(entry.stub),
+            Some(Some(entry)) if std::rc::Rc::as_ptr(entry.info.program()) == program => {
+                Some(entry.stub)
+            }
             _ => None,
         }
     }
@@ -259,7 +282,11 @@ pub struct TrimResult {
 /// generation costs what lazy generation saved, so it should not run on the load's critical path.
 /// A stub whose generation fails is left pending (its first call reports the error), so a program
 /// with one is not freed; the loop moves on to the next program.
-pub fn trim_retained_programs(cx: Context, budget_bytes: usize, deadline: Instant) -> EvalResult<TrimResult> {
+pub fn trim_retained_programs(
+    cx: Context,
+    budget_bytes: usize,
+    deadline: Instant,
+) -> EvalResult<TrimResult> {
     let mut result = TrimResult::default();
     let mut failed_programs: Vec<*const ParsedProgram> = Vec::new();
 
@@ -285,8 +312,15 @@ pub fn trim_retained_programs(cx: Context, budget_bytes: usize, deadline: Instan
 
         // Dropping a program's AST frees it without generating anything
         if reparse {
-            detach_program(cx, program).map_err(|error| crate::runtime::error::syntax_error::<()>(cx, &error.to_string()).unwrap_err())?;
-            if cx.lazy_functions.retained_programs(true).iter().any(|(p, _)| *p == program) {
+            detach_program(cx, program).map_err(|error| {
+                crate::runtime::error::syntax_error::<()>(cx, &error.to_string()).unwrap_err()
+            })?;
+            if cx
+                .lazy_functions
+                .retained_programs(true)
+                .iter()
+                .any(|(p, _)| *p == program)
+            {
                 failed_programs.push(program);
             } else {
                 result.freed_programs += 1;
@@ -305,7 +339,9 @@ pub fn trim_retained_programs(cx: Context, budget_bytes: usize, deadline: Instan
             let mut progressed = false;
             for (i, id) in ids.into_iter().enumerate() {
                 // A GC during generation may move or collect stubs: look each one up again
-                let Some(stub) = cx.lazy_functions.stub_of(id, program) else { continue };
+                let Some(stub) = cx.lazy_functions.stub_of(id, program) else {
+                    continue;
+                };
                 match ensure_generated(cx, stub.to_handle()) {
                     Ok(_) => {
                         result.generated += 1;
@@ -454,7 +490,9 @@ pub fn reparse_enabled(cx: Context) -> bool {
 /// Generate a pending stub now, while its AST is alive. On failure the stub is marked failed, so
 /// that its first call reports the error after the AST is gone.
 fn generate_before_drop(mut cx: Context, id: u32) {
-    let Some(Some(entry)) = cx.lazy_functions.entries.get(id as usize) else { return };
+    let Some(Some(entry)) = cx.lazy_functions.entries.get(id as usize) else {
+        return;
+    };
     let mut stub = entry.stub.to_handle();
     let mut info = cx.lazy_functions.take(id);
     cx.lazy_functions.reparse.generated_before_drop += 1;
@@ -478,7 +516,9 @@ pub(crate) fn detach_collected(
     while cx.lazy_functions.collected.len() > mark {
         let id = cx.lazy_functions.collected.pop().unwrap();
         let lazy = &mut cx.lazy_functions;
-        let Some(Some(entry)) = lazy.entries.get_mut(id as usize) else { continue };
+        let Some(Some(entry)) = lazy.entries.get_mut(id as usize) else {
+            continue;
+        };
         if !entry.info.is_attached() {
             continue;
         }
@@ -496,11 +536,16 @@ pub(crate) fn detach_collected(
 /// Drop the AST of a program whose script has run: its pending stubs are detached (or generated,
 /// for the few that cannot be parsed again on their own) and the AST arena is freed, keeping the
 /// scope tree. Does nothing unless the context re-parses, or if no stub of the program is pending.
-pub fn detach_program(mut cx: Context, program: *const ParsedProgram) -> Result<(), crate::runtime::bytecode::generator::EmitError> {
+pub fn detach_program(
+    mut cx: Context,
+    program: *const ParsedProgram,
+) -> Result<(), crate::runtime::bytecode::generator::EmitError> {
     if !reparse_enabled(cx) {
         return Ok(());
     }
-    let Some(program_rc) = cx.lazy_functions.program_rc(program) else { return Ok(()) };
+    let Some(program_rc) = cx.lazy_functions.program_rc(program) else {
+        return Ok(());
+    };
     if !program_rc.has_ast() {
         return Ok(());
     }
@@ -513,7 +558,9 @@ pub fn detach_program(mut cx: Context, program: *const ParsedProgram) -> Result<
         }
         for id in ids {
             let lazy = &mut cx.lazy_functions;
-            let Some(Some(entry)) = lazy.entries.get_mut(id as usize) else { continue };
+            let Some(Some(entry)) = lazy.entries.get_mut(id as usize) else {
+                continue;
+            };
             if !entry.info.is_attached() || std::rc::Rc::as_ptr(entry.info.program()) != program {
                 continue;
             }

@@ -130,7 +130,6 @@ fn fast_element_ptr<T>(
     let base = buffer.raw_data_ptr()?;
     let data_len = buffer.byte_length();
 
-
     let array_length = match array_length {
         Some(array_length) => {
             // The entire fixed length typed array is invalid if the underlying buffer has shrunk

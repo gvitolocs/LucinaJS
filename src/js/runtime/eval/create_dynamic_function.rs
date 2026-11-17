@@ -12,9 +12,9 @@ use crate::{
         source::Source,
     },
     runtime::{
-        embed,
         Arguments, Context, Handle,
         bytecode::{function::ClosureObject, generator::BytecodeProgramGenerator},
+        embed,
         error::{syntax_error, syntax_parse_error},
         eval_result::EvalResult,
         intrinsics::{
@@ -60,7 +60,8 @@ pub fn create_dynamic_function(
     let arg_count = args.len();
     // Capture rooted originals before any ToString can execute user code or trigger GC.
     let parameter_args: Vec<_> = (0..arg_count.saturating_sub(1))
-        .map(|i| args.get(cx, i)).collect();
+        .map(|i| args.get(cx, i))
+        .collect();
 
     // Construct text for params, body, and entire function
     let mut params_string = Wtf8String::new();
@@ -119,9 +120,17 @@ pub fn create_dynamic_function(
             embed::CompileStringsKind::Function,
             code,
             &parameter_strings,
-            if arg_count == 0 { None } else { Some(body_value) },
+            if arg_count == 0 {
+                None
+            } else {
+                Some(body_value)
+            },
             &parameter_args,
-            if arg_count == 0 { cx.undefined() } else { body_arg },
+            if arg_count == 0 {
+                cx.undefined()
+            } else {
+                body_arg
+            },
         )?;
     }
 

@@ -3,12 +3,12 @@ use std::{collections::HashMap, path::Path};
 use crate::{
     completion_value, eval_err, if_abrupt_reject_promise, must, must_a,
     runtime::{
-        embed,
         Context, EvalResult, Handle, PropertyKey, Value,
         abstract_operations::{KeyOrValue, call_object, enumerable_own_property_names},
         alloc_error::AllocResult,
         builtin_function::BuiltinFunction,
         context::ModuleCacheKey,
+        embed,
         error::type_error_value,
         get,
         interned_strings::InternedStrings,

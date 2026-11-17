@@ -24,7 +24,12 @@ pub enum ReparseKind {
     Arrow,
     /// An object or class method, getter or setter. The function's range starts at the property
     /// (modifiers and key), its parameters at `params_pos`.
-    Method { kind: MethodKind, params_pos: Pos, is_async: bool, is_generator: bool },
+    Method {
+        kind: MethodKind,
+        params_pos: Pos,
+        is_async: bool,
+        is_generator: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

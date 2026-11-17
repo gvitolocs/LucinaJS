@@ -25,18 +25,6 @@
 //! load - so the spec's own arithmetic runs directly over them instead, and every string it
 //! produces is one the data wrote.
 
-use crate::extend_object;
-use crate::runtime::{
-    Context, Handle, Value,
-    error::{range_error, type_error},
-    eval_result::EvalResult,
-    gc::{HeapItem, HeapPtr, HeapVisitor},
-    intrinsics::intrinsics::Intrinsic,
-    object_value::ObjectValue,
-    ordinary_object::ObjectBuilder,
-    type_utilities::number_to_string,
-};
-
 use brimstone_intl_data::IntlDataProvider;
 use fixed_decimal::{Decimal, Sign};
 use icu_experimental::relativetime::provider::{
@@ -66,6 +54,17 @@ use super::number_format_core::{
 use super::number_format_object::get_unicode_extension_option;
 use super::options::{coerce_options_to_object, get_enum_option, get_name_option};
 use super::plural_rules_object::{PluralRuleType, PluralRulesSettings};
+use crate::extend_object;
+use crate::runtime::{
+    Context, Handle, Value,
+    error::{range_error, type_error},
+    eval_result::EvalResult,
+    gc::{HeapItem, HeapPtr, HeapVisitor},
+    intrinsics::intrinsics::Intrinsic,
+    object_value::ObjectValue,
+    ordinary_object::ObjectBuilder,
+    type_utilities::number_to_string,
+};
 
 /// One of the eight units 18.5.1 accepts, as `[[<unit>]]` names the pattern tables.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -336,17 +335,19 @@ impl RelativeTimeFormatObject {
     /// step 2 and 18.3.4 step 2, on the `this` value itself. There is no UnwrapRelativeTimeFormat
     /// in front of it: 18.1.1 step 1 refuses the only call mode that would have put an instance
     /// behind a fallback symbol.
-    pub fn require_initialized(
-        cx: Context,
-        this_value: Handle<Value>,
-    ) -> EvalResult<Handle<Self>> {
+    pub fn require_initialized(cx: Context, this_value: Handle<Value>) -> EvalResult<Handle<Self>> {
         if !this_value.is_object() {
-            return type_error(cx, "Intl.RelativeTimeFormat method called on incompatible receiver");
+            return type_error(
+                cx,
+                "Intl.RelativeTimeFormat method called on incompatible receiver",
+            );
         }
 
         match this_value.as_object().as_opt::<Self>() {
             Some(instance) if instance.resolved.is_some() => Ok(instance),
-            _ => type_error(cx, "Intl.RelativeTimeFormat method called on an uninitialized instance"),
+            _ => {
+                type_error(cx, "Intl.RelativeTimeFormat method called on an uninitialized instance")
+            }
         }
     }
 
@@ -470,10 +471,18 @@ impl RelativeTimeFormatObject {
     /// `self` is a borrow of a heap object that no step below reads a second time: the resolved
     /// record is `Copy` and is taken out first, so nothing held across the loads and allocations
     /// of the rest points into the heap.
-    pub fn partition(&self, cx: Context, value: f64, unit: &str) -> EvalResult<Vec<RelativeTimePart>> {
+    pub fn partition(
+        &self,
+        cx: Context,
+        value: f64,
+        unit: &str,
+    ) -> EvalResult<Vec<RelativeTimePart>> {
         let Some(resolved) = self.resolved() else {
             // The question `require_initialized` has already answered.
-            return type_error(cx, "Intl.RelativeTimeFormat method called on an uninitialized instance");
+            return type_error(
+                cx,
+                "Intl.RelativeTimeFormat method called on an uninitialized instance",
+            );
         };
 
         // Step 1: NaN and the two infinities are the values no relative time has a name for.
@@ -494,10 +503,11 @@ impl RelativeTimeFormatObject {
 
         // Steps 3 to 6: the tables of [[LocaleData]][[<unit>]], with the `unit-style` key of steps
         // 6.1 and 6.2 being the marker the data is baked under.
-        let patterns = match cx
-            .locale_cache()
-            .relative_time_patterns(resolved.settings.locale, resolved.settings.style, unit)
-        {
+        let patterns = match cx.locale_cache().relative_time_patterns(
+            resolved.settings.locale,
+            resolved.settings.style,
+            unit,
+        ) {
             Ok(patterns) => patterns,
             Err(_) => {
                 return range_error(
@@ -584,11 +594,7 @@ impl RelativeTimeFormatObject {
         number.sign = Sign::None;
         number.absolute = digits;
 
-        let mut sink = RelativeTimePartsSink {
-            parts: Vec::new(),
-            unit,
-            annotated: None,
-        };
+        let mut sink = RelativeTimePartsSink { parts: Vec::new(), unit, annotated: None };
 
         // A sink only ever pushes onto a `Vec`, so the only thing that can come back is success;
         // a debug build checks that instead of an `unwrap` carrying a panic into a call. The pass
@@ -718,11 +724,9 @@ impl std::fmt::Write for RelativeTimePartsSink {
         if !text.is_empty() {
             match self.parts.last_mut() {
                 Some(last) if last.kind == kind && last.unit == unit => last.value.push_str(text),
-                _ => self.parts.push(RelativeTimePart {
-                    kind,
-                    value: text.to_owned(),
-                    unit,
-                }),
+                _ => self
+                    .parts
+                    .push(RelativeTimePart { kind, value: text.to_owned(), unit }),
             }
         }
 
@@ -732,8 +736,8 @@ impl std::fmt::Write for RelativeTimePartsSink {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::number_format_core::DecimalRenderer;
+    use super::*;
 
     /// The tables of 18.4 for one built-in locale, `style` and unit, loaded the way the cache
     /// loads them - the data level `partition` reaches without a heap, since a `Context` has no
@@ -778,11 +782,7 @@ mod tests {
         let renderer = DecimalRenderer::try_new(locale, UseGrouping::Auto)
             .expect("every built in locale has a decimal format");
 
-        let mut sink = RelativeTimePartsSink {
-            parts: Vec::new(),
-            unit,
-            annotated: None,
-        };
+        let mut sink = RelativeTimePartsSink { parts: Vec::new(), unit, annotated: None };
         let pattern = if past { &data.past } else { &data.future };
         let written = pattern
             .get(operands, rules.rules())
@@ -820,7 +820,11 @@ mod tests {
     #[test]
     fn every_built_in_locale_has_every_table() {
         for locale in brimstone_intl_data::BUILT_IN_LOCALES {
-            for style in [RelativeTimeStyle::Long, RelativeTimeStyle::Short, RelativeTimeStyle::Narrow] {
+            for style in [
+                RelativeTimeStyle::Long,
+                RelativeTimeStyle::Short,
+                RelativeTimeStyle::Narrow,
+            ] {
                 for unit in [
                     RelativeTimeUnit::Second,
                     RelativeTimeUnit::Minute,
@@ -879,7 +883,9 @@ mod tests {
         let en = parts("en", RelativeTimeStyle::Long, RelativeTimeUnit::Day, true, 3);
         assert_eq!(kinds(&en), ["integer", "literal"]);
         assert_eq!(
-            en.iter().map(|part| part.value.as_str()).collect::<Vec<_>>(),
+            en.iter()
+                .map(|part| part.value.as_str())
+                .collect::<Vec<_>>(),
             ["3", " days ago"]
         );
         assert_eq!(part_units(&en), [Some("day"), None]);
@@ -887,14 +893,18 @@ mod tests {
         let da = parts("da", RelativeTimeStyle::Long, RelativeTimeUnit::Day, true, 3);
         assert_eq!(kinds(&da), ["literal", "integer", "literal"]);
         assert_eq!(
-            da.iter().map(|part| part.value.as_str()).collect::<Vec<_>>(),
+            da.iter()
+                .map(|part| part.value.as_str())
+                .collect::<Vec<_>>(),
             ["for ", "3", " dage siden"]
         );
 
         let it = parts("it", RelativeTimeStyle::Long, RelativeTimeUnit::Day, true, 3);
         assert_eq!(kinds(&it), ["integer", "literal"]);
         assert_eq!(
-            it.iter().map(|part| part.value.as_str()).collect::<Vec<_>>(),
+            it.iter()
+                .map(|part| part.value.as_str())
+                .collect::<Vec<_>>(),
             ["3", " giorni fa"]
         );
     }
@@ -932,7 +942,13 @@ mod tests {
             "0 minutes ago"
         );
         assert_eq!(
-            format_relative_time("en", RelativeTimeStyle::Short, RelativeTimeUnit::Quarter, true, 3),
+            format_relative_time(
+                "en",
+                RelativeTimeStyle::Short,
+                RelativeTimeUnit::Quarter,
+                true,
+                3
+            ),
             "3 qtrs. ago"
         );
     }

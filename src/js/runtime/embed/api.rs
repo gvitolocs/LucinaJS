@@ -1,38 +1,34 @@
 //! Re-exports and thin wrappers of engine operations an embedder needs.
 
+pub use num_bigint::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive};
 
 use super::with_realm;
+// --- Core types ---
+pub use crate::common::string::StringWidth;
+// --- Property operations ---
+pub use crate::runtime::abstract_operations::{
+    create_data_property, define_property_or_throw, delete_property_or_throw, get,
+    has_own_property, has_property, is_extensible, length_of_array_like, set,
+};
+pub use crate::runtime::alloc_error::AllocResult;
+pub use crate::runtime::builtin_names::BuiltinSymbols;
 use crate::runtime::intrinsics::typed_array_prototype::{
     is_typed_array_out_of_bounds, make_typed_array_with_buffer_witness_record,
 };
-use crate::runtime::{
-    abstract_operations::construct as construct_object,
-    interned_strings::InternedStrings,
-    intrinsics::date_object::time_clip,
-    array_object::{self},
-    collections::hash_map::BsHashMapField,
-    ordinary_object::ordinary_object_create,
-    promise_object::{self, PromiseState},
-};
-
-// --- Core types ---
-
-pub use crate::common::string::StringWidth;
-pub use crate::runtime::alloc_error::AllocResult;
-pub use crate::runtime::builtin_names::BuiltinSymbols;
 pub use crate::runtime::object_value::ObjectValue;
 pub use crate::runtime::{
     Context, EvalResult, Handle, HeapPtr, PropertyDescriptor, PropertyFlags, PropertyKey, Realm,
     Value,
 };
-pub use num_bigint::BigInt;
-
-// --- Property operations ---
-
-pub use crate::runtime::abstract_operations::{
-    create_data_property, define_property_or_throw, delete_property_or_throw, get, has_own_property,
-    has_property, is_extensible, length_of_array_like, set,
+use crate::runtime::{
+    abstract_operations::construct as construct_object,
+    array_object::{self},
+    collections::hash_map::BsHashMapField,
+    interned_strings::InternedStrings,
+    intrinsics::date_object::time_clip,
+    ordinary_object::ordinary_object_create,
+    promise_object::{self, PromiseState},
 };
 
 /// Set a property without throwing on failure, returning whether the set succeeded.
@@ -52,7 +48,9 @@ pub fn get_own_property_descriptor(
     object: Handle<ObjectValue>,
     key: Handle<PropertyKey>,
 ) -> EvalResult<Option<PropertyDescriptor>> {
-    Ok(object.get_own_property(cx, key)?.map(|property| property.to_property_descriptor()))
+    Ok(object
+        .get_own_property(cx, key)?
+        .map(|property| property.to_property_descriptor()))
 }
 
 /// The object's own property keys, as values (strings, symbols and array indices).
@@ -103,15 +101,13 @@ pub fn property_key_from_index(cx: Context, index: u32) -> AllocResult<Handle<Pr
 
 // --- Conversions ---
 
+// --- Strings ---
+pub use crate::runtime::string_value::{FlatString, StringValue};
 pub use crate::runtime::type_utilities::{
     ToPrimitivePreferredType, is_array, is_callable, is_constructor_value, same_value,
     same_value_zero_non_allocating, to_boolean, to_int32, to_number, to_object, to_primitive,
     to_property_key, to_string, to_uint32,
 };
-
-// --- Strings ---
-
-pub use crate::runtime::string_value::{FlatString, StringValue};
 
 /// Create a one-byte (Latin-1) string from raw bytes.
 pub fn string_from_latin1(cx: Context, bytes: &[u8]) -> EvalResult<Handle<FlatString>> {
@@ -193,7 +189,8 @@ pub fn symbol_for(cx: Context, key: &str) -> EvalResult<Handle<SymbolValue>> {
         return Ok(symbol.to_handle());
     }
 
-    let new_symbol = SymbolValue::new(cx, Some(string_key.as_string()), /* is_private */ false)?;
+    let new_symbol =
+        SymbolValue::new(cx, Some(string_key.as_string()), /* is_private */ false)?;
     cx.global_symbol_registry_field()
         .maybe_grow_for_insertion(cx)?
         .insert_without_growing(*string_key, *new_symbol);
@@ -345,13 +342,18 @@ pub unsafe fn array_buffer_new_external(
         let new_external = |cx, owner: Option<Handle<ObjectValue>>, key| {
             // SAFETY: the caller's contract (`# Safety` above) is `new_external`'s, for `data` and
             // `byte_length` as given; null and misaligned data are refused there.
-            unsafe { ArrayBufferObject::new_external(cx, constructor, data, byte_length, owner, key) }
+            unsafe {
+                ArrayBufferObject::new_external(cx, constructor, data, byte_length, owner, key)
+            }
         };
 
         match owner {
             ExternalOwner::None => new_external(cx, None, DetachKey::None),
             ExternalOwner::Cell(cell) => {
-                debug_assert!(super::is_engine_cell(*cell), "the owner of a wasm memory buffer is an engine cell");
+                debug_assert!(
+                    super::is_engine_cell(*cell),
+                    "the owner of a wasm memory buffer is an engine cell"
+                );
                 new_external(cx, Some(cell), DetachKey::WasmMemory)
             }
             ExternalOwner::Free(free) => crate::handle_scope!(cx, {
@@ -430,22 +432,38 @@ pub fn is_typed_array(value: Handle<Value>) -> bool {
 
 /// The kind of a typed array object, or None if the object is not a typed array.
 pub fn typed_array_kind(array: Handle<ObjectValue>) -> Option<TypedArrayKind> {
-    if array.is_typed_array() { Some(array.as_typed_array().kind()) } else { None }
+    if array.is_typed_array() {
+        Some(array.as_typed_array().kind())
+    } else {
+        None
+    }
 }
 
 /// The element length of a typed array, or None if it is not a typed array or has auto length.
 pub fn typed_array_element_length(array: Handle<ObjectValue>) -> Option<usize> {
-    if array.is_typed_array() { array.as_typed_array().array_length() } else { None }
+    if array.is_typed_array() {
+        array.as_typed_array().array_length()
+    } else {
+        None
+    }
 }
 
 /// The byte offset of a typed array within its buffer, or None if it is not a typed array.
 pub fn typed_array_byte_offset(array: Handle<ObjectValue>) -> Option<usize> {
-    if array.is_typed_array() { Some(array.as_typed_array().byte_offset()) } else { None }
+    if array.is_typed_array() {
+        Some(array.as_typed_array().byte_offset())
+    } else {
+        None
+    }
 }
 
 /// The byte length of a typed array, or None if it is not a typed array or has auto length.
 pub fn typed_array_byte_length(array: Handle<ObjectValue>) -> Option<usize> {
-    if array.is_typed_array() { array.as_typed_array().byte_length() } else { None }
+    if array.is_typed_array() {
+        array.as_typed_array().byte_length()
+    } else {
+        None
+    }
 }
 
 /// A pointer to the typed array's data within its buffer, or None if it is not a typed array, its
@@ -493,7 +511,11 @@ pub fn promise_resolve(
 /// Reject a promise with a reason, as SpiderMonkey's `JS::RejectPromise` (`PromiseObject::reject`) does: a promise that is
 /// already settled, or already resolved to another promise or thenable, is left alone (its default reject function would
 /// do nothing). Returns whether the promise was rejected.
-pub fn promise_reject(cx: Context, mut promise: Handle<PromiseObject>, value: Handle<Value>) -> bool {
+pub fn promise_reject(
+    cx: Context,
+    mut promise: Handle<PromiseObject>,
+    value: Handle<Value>,
+) -> bool {
     match &promise.state {
         PromiseState::Pending { already_resolved: false, .. } => {
             promise.reject(cx, *value);
@@ -529,7 +551,11 @@ pub fn is_promise(value: Handle<Value>) -> bool {
 
 /// The promise object of a value, if it is one.
 pub fn as_promise(value: Handle<Value>) -> Option<Handle<PromiseObject>> {
-    if value.is_object() { value.as_object().as_opt::<PromiseObject>() } else { None }
+    if value.is_object() {
+        value.as_object().as_opt::<PromiseObject>()
+    } else {
+        None
+    }
 }
 
 // --- Errors ---
@@ -1032,7 +1058,9 @@ mod tests {
             assert!(has_property(cx, object, b_key).unwrap());
             assert!(has_own_property(cx, object, b_key).unwrap());
 
-            let desc = get_own_property_descriptor(cx, object, b_key).unwrap().unwrap();
+            let desc = get_own_property_descriptor(cx, object, b_key)
+                .unwrap()
+                .unwrap();
             assert_eq!(desc.value.unwrap().as_number(), 3.0);
             assert!(desc.is_writable.unwrap());
 
@@ -1132,15 +1160,8 @@ mod tests {
             // SAFETY: `ptr` points to 4 writable bytes of the buffer's backing data.
             unsafe { std::ptr::write(ptr, 42) };
 
-            let view = create_typed_array(
-                cx,
-                realm,
-                TypedArrayKind::UInt8,
-                buffer,
-                0,
-                Some(4),
-            )
-            .unwrap();
+            let view =
+                create_typed_array(cx, realm, TypedArrayKind::UInt8, buffer, 0, Some(4)).unwrap();
             assert!(is_typed_array(view.as_value()));
             assert!(matches!(typed_array_kind(view), Some(TypedArrayKind::UInt8)));
             assert_eq!(typed_array_element_length(view), Some(4));
@@ -1218,7 +1239,9 @@ mod tests {
             // Accessor descriptors come back complete
             let object = eval_in(cx, "({ get g() { return 1; } })").as_object();
             let g_key = property_key_from_string(cx, "g").unwrap();
-            let desc = get_own_property_descriptor(cx, object, g_key).unwrap().unwrap();
+            let desc = get_own_property_descriptor(cx, object, g_key)
+                .unwrap()
+                .unwrap();
             assert!(desc.get.is_some() && desc.set.is_none());
             assert_eq!(desc.is_enumerable, Some(true));
             assert_eq!(desc.is_configurable, Some(true));
@@ -1227,7 +1250,9 @@ mod tests {
             let frozen = PropertyDescriptor::data(cx.smi(5), PropertyFlags::empty());
             let k_key = property_key_from_string(cx, "k").unwrap();
             assert!(define_property(cx, object, k_key, frozen).unwrap());
-            let desc = get_own_property_descriptor(cx, object, k_key).unwrap().unwrap();
+            let desc = get_own_property_descriptor(cx, object, k_key)
+                .unwrap()
+                .unwrap();
             assert_eq!(desc.is_writable, Some(false));
             assert!(!delete_property(cx, object, k_key).unwrap());
 
@@ -1236,7 +1261,12 @@ mod tests {
             assert_eq!(object_identity_hash(*object), hash);
 
             let proto = intrinsic(realm, Intrinsic::ObjectPrototype);
-            assert!(get_prototype_of(cx, object).unwrap().unwrap().ptr_eq(&proto));
+            assert!(
+                get_prototype_of(cx, object)
+                    .unwrap()
+                    .unwrap()
+                    .ptr_eq(&proto)
+            );
             assert!(global_of_realm(*realm).ptr_eq(&realm.global_object().as_object()));
             assert!(to_boolean(*cx.smi(1)));
             assert_eq!(to_number(cx, eval_in(cx, "'12'")).unwrap().as_number(), 12.0);
@@ -1325,7 +1355,11 @@ mod tests {
             let column_key = property_key_from_string(cx, "columnNumber").unwrap();
             assert_eq!(get(cx, error, column_key).unwrap().as_number(), 7.0);
             let stack = error_stack(cx, eval_in(cx, "new Error('s')").as_object()).unwrap();
-            assert!(string_to_rust_string(stack.unwrap()).unwrap().contains("api.js"));
+            assert!(
+                string_to_rust_string(stack.unwrap())
+                    .unwrap()
+                    .contains("api.js")
+            );
         });
         cx.drop();
     }
@@ -1355,14 +1389,16 @@ mod tests {
 
             assert!(rope.as_flat_no_gc().is_none(), "rope was flattened");
             // SAFETY: The closures below only read the chars, they do not allocate on the JS heap.
-            let (len, euro_index, last) = unsafe { with_string_chars_no_gc(*rope, |chars| match chars {
-                StringChars::TwoByte(units) => (
-                    units.len(),
-                    units.iter().position(|unit| *unit == 0x20AC),
-                    *units.last().unwrap(),
-                ),
-                StringChars::Latin1(_) => panic!("expected two-byte chars"),
-            }) };
+            let (len, euro_index, last) = unsafe {
+                with_string_chars_no_gc(*rope, |chars| match chars {
+                    StringChars::TwoByte(units) => (
+                        units.len(),
+                        units.iter().position(|unit| *unit == 0x20AC),
+                        *units.last().unwrap(),
+                    ),
+                    StringChars::Latin1(_) => panic!("expected two-byte chars"),
+                })
+            };
             assert_eq!(len, PIECES);
             assert_eq!(euro_index, Some(PIECES / 2));
             assert_eq!(last, b'b' as u16);
@@ -1371,19 +1407,23 @@ mod tests {
             assert!(rope.as_flat_no_gc().is_none());
             let flat = string_from_latin1(cx, b"xyz").unwrap();
             // SAFETY: As above.
-            let borrowed = unsafe { with_string_chars_no_gc(*flat.as_string(), |chars| match chars {
-                StringChars::Latin1(bytes) => bytes.as_ptr() == flat_latin1_ptr(*flat),
-                StringChars::TwoByte(_) => false,
-            }) };
+            let borrowed = unsafe {
+                with_string_chars_no_gc(*flat.as_string(), |chars| match chars {
+                    StringChars::Latin1(bytes) => bytes.as_ptr() == flat_latin1_ptr(*flat),
+                    StringChars::TwoByte(_) => false,
+                })
+            };
             assert!(borrowed);
 
             // One-byte ropes stay one-byte
             let small = eval_in(cx, "var q = 'x'; q += 'yz'; q");
             // SAFETY: As above.
-            unsafe { with_string_chars_no_gc(*small.as_string(), |chars| match chars {
-                StringChars::Latin1(bytes) => assert_eq!(bytes, b"xyz"),
-                StringChars::TwoByte(_) => panic!("expected Latin-1"),
-            }) };
+            unsafe {
+                with_string_chars_no_gc(*small.as_string(), |chars| match chars {
+                    StringChars::Latin1(bytes) => assert_eq!(bytes, b"xyz"),
+                    StringChars::TwoByte(_) => panic!("expected Latin-1"),
+                })
+            };
         });
         cx.drop();
     }

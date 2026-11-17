@@ -1064,16 +1064,11 @@ impl DatePrototype {
         // handle straight away: the steps below allocate, and a collection moves the block out from
         // under a bare pointer, which is the address `format_to_string` would then read its slots
         // out of.
-        let formatter = DateTimeFormatObject::new(cx, cx.get_intrinsic(Intrinsic::DateTimeFormatConstructor))?.to_handle();
+        let formatter =
+            DateTimeFormatObject::new(cx, cx.get_intrinsic(Intrinsic::DateTimeFormatConstructor))?
+                .to_handle();
 
-        DateTimeFormatObject::initialize(
-            formatter,
-            cx,
-            locales,
-            options,
-            required,
-            defaults,
-        )?;
+        DateTimeFormatObject::initialize(formatter, cx, locales, options, required, defaults)?;
 
         // Step 6: 11.5.6 over the [[DateValue]] the method read, whose `!` is because a time value that
         // is not NaN has nothing left to fail on. The zone is the one the format resolved to, which is

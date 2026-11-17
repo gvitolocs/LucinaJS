@@ -195,8 +195,10 @@ pub(crate) unsafe fn swap_allocations(a: *const u8, b: *const u8) -> bool {
     unsafe {
         let ha = a.sub(HEADER_SIZE) as *mut HostHeader;
         let hb = b.sub(HEADER_SIZE) as *mut HostHeader;
-        let (size_a, slots_a, marked_a) = ((*ha).alloc_size, (*ha).num_reserved_slots, (*ha).marked);
-        let (size_b, slots_b, marked_b) = ((*hb).alloc_size, (*hb).num_reserved_slots, (*hb).marked);
+        let (size_a, slots_a, marked_a) =
+            ((*ha).alloc_size, (*ha).num_reserved_slots, (*ha).marked);
+        let (size_b, slots_b, marked_b) =
+            ((*hb).alloc_size, (*hb).num_reserved_slots, (*hb).marked);
         if size_a != size_b || slots_a != slots_b {
             return false;
         }
@@ -405,12 +407,19 @@ impl HostSpace {
     #[inline]
     pub fn contains(&self, ptr: *const u8) -> bool {
         let base = (ptr as usize) & !(HEAP_ALIGNMENT - 1);
-        self.regions.iter().any(|region| region.base as usize == base)
+        self.regions
+            .iter()
+            .any(|region| region.base as usize == base)
     }
 
     /// A copy of the region bases, answering `contains` without a reference to this space.
     pub fn region_bases(&self) -> HostRegionBases {
-        HostRegionBases(self.regions.iter().map(|region| region.base as usize).collect())
+        HostRegionBases(
+            self.regions
+                .iter()
+                .map(|region| region.base as usize)
+                .collect(),
+        )
     }
 
     /// Bytes in allocations that are in use.
@@ -431,7 +440,6 @@ impl HostSpace {
     pub fn num_objects(&self) -> usize {
         self.objects.len()
     }
-
 
     /// Allocate a new host object with an initialized header and reserved slots (all undefined).
     /// The object itself is left uninitialized and must be initialized by the caller.

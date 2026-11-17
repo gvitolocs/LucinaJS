@@ -46,8 +46,7 @@ use crate::{
         gc::{GarbageCollector, Heap, HeapItem, HeapRootsDeserializer, HeapVisitor},
         interned_strings::InternedStrings,
         intrinsics::{
-            intl::cache::LocaleCache,
-            intrinsics::Intrinsic,
+            intl::cache::LocaleCache, intrinsics::Intrinsic,
             rust_runtime::RustRuntimeFunctionRegistry,
         },
         module::{

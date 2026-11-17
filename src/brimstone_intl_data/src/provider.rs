@@ -24,13 +24,13 @@ mod tests {
     use fixed_decimal::UnsignedDecimal;
     use icu_collator::{Collator, CollatorPreferences, options::CollatorOptions};
     use icu_locale::Locale;
-    use icu_segmenter::{
-        GraphemeClusterSegmenter, SentenceSegmenter, WordSegmenter,
-        options::{SentenceBreakOptions, WordBreakOptions},
-    };
     use icu_plurals::{
         PluralCategory, PluralOperands, PluralRuleType, PluralRules, PluralRulesOptions,
         PluralRulesPreferences, PluralRulesWithRanges,
+    };
+    use icu_segmenter::{
+        GraphemeClusterSegmenter, SentenceSegmenter, WordSegmenter,
+        options::{SentenceBreakOptions, WordBreakOptions},
     };
 
     use super::IntlDataProvider;
@@ -166,13 +166,7 @@ mod tests {
     /// That `unwrap` is the point of this helper as much as of the test that uses it: the engine's own
     /// cache unwraps the same way, and it is only allowed to because every marker of
     /// `icu/intl_markers.txt` for the segmenters is baked for every built-in locale.
-    fn segmenters(
-        tag: &str,
-    ) -> (
-        GraphemeClusterSegmenter,
-        WordSegmenter,
-        SentenceSegmenter,
-    ) {
+    fn segmenters(tag: &str) -> (GraphemeClusterSegmenter, WordSegmenter, SentenceSegmenter) {
         let locale = tag.parse::<Locale>().expect("a built in locale parses");
 
         // The options are `non_exhaustive`, so the one field that matters is written onto the
@@ -185,8 +179,11 @@ mod tests {
 
         (
             GraphemeClusterSegmenter::try_new_unstable(&IntlDataProvider).unwrap(),
-            WordSegmenter::try_new_for_non_complex_scripts_unstable(&IntlDataProvider, word_options)
-                .unwrap(),
+            WordSegmenter::try_new_for_non_complex_scripts_unstable(
+                &IntlDataProvider,
+                word_options,
+            )
+            .unwrap(),
             SentenceSegmenter::try_new_unstable(&IntlDataProvider, sentence_options).unwrap(),
         )
     }

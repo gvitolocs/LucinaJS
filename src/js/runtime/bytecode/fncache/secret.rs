@@ -9,7 +9,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::LazyLock;
 
-use rand::{rngs::OsRng, RngCore};
+use rand::{RngCore, rngs::OsRng};
 
 /// 128 random bits.
 pub type KeySecret = [u8; 16];
@@ -90,7 +90,10 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(dir.join(SECRET_FILE_NAME)).unwrap().permissions().mode();
+            let mode = std::fs::metadata(dir.join(SECRET_FILE_NAME))
+                .unwrap()
+                .permissions()
+                .mode();
             assert_eq!(mode & 0o777, 0o600);
         }
         let _ = std::fs::remove_dir_all(&dir);

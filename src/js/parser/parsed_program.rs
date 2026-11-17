@@ -269,7 +269,6 @@ impl ParsedProgram {
         Ok(AstPtr::from_ref(func.as_ref()))
     }
 
-
     /// Bytes in use in the AST arena and in the scope tree arena (allocated chunks minus their free
     /// tails), for measurements.
     pub fn used_arena_bytes(&self) -> (usize, usize) {
@@ -290,7 +289,9 @@ impl ParsedProgram {
 /// this is an engine bug).
 fn reparse_error(source: &Rc<Source>, loc: Loc) -> LocalizedParseError {
     LocalizedParseError {
-        error: crate::parser::ParseError::new_unknown_token("(engine: lazy function could not be parsed again)".to_owned()),
+        error: crate::parser::ParseError::new_unknown_token(
+            "(engine: lazy function could not be parsed again)".to_owned(),
+        ),
         source_loc: Some((loc, source.clone())),
     }
 }

@@ -10,19 +10,14 @@ use std::{
 };
 
 use crate::{
-    common::{
-        constants::DEFAULT_MIN_HEAP_SIZE,
-        options::OptionsBuilder,
-    },
+    common::{constants::DEFAULT_MIN_HEAP_SIZE, options::OptionsBuilder},
     handle_scope_guard,
     runtime::{
         Context, ContextBuilder, EvalResult, Handle, HeapPtr, PropertyDescriptor, PropertyFlags,
         PropertyKey, Realm, Value,
         abstract_operations::{define_property_or_throw, get},
+        embed::{self, Host, HostFlags, HostObjectRef, NativeCall, RootVisitor, WeakUpdater},
         gc::Heap,
-        embed::{
-            self, Host, HostFlags, HostObjectRef, NativeCall, RootVisitor, WeakUpdater,
-        },
         intrinsics::intrinsics::Intrinsic,
         object_value::ObjectValue,
         ordinary_object::{ordinary_get, ordinary_object_create},
@@ -218,7 +213,10 @@ impl Host for TestHost {
             .or_default() += 1;
 
         if name == "lazyValue" {
-            let desc = PropertyDescriptor::data(cx.number(99.0), PropertyFlags::from_data_attributes(true, true, true));
+            let desc = PropertyDescriptor::data(
+                cx.number(99.0),
+                PropertyFlags::from_data_attributes(true, true, true),
+            );
             define_property_or_throw(cx, object, key, desc)?;
             return Ok(true);
         }
@@ -235,7 +233,10 @@ impl Host for TestHost {
         _: Option<Handle<embed::ImportAttributes>>,
     ) -> EvalResult<Option<Handle<embed::SourceTextModule>>> {
         let specifier = specifier.to_string();
-        self.0.resolved_specifiers.borrow_mut().push(specifier.clone());
+        self.0
+            .resolved_specifiers
+            .borrow_mut()
+            .push(specifier.clone());
         test_module(cx, &self.0, &specifier).map(Some)
     }
 
@@ -272,7 +273,10 @@ impl Host for TestHost {
             cx,
             meta,
             url_key,
-            PropertyDescriptor::data(url.as_value(), PropertyFlags::from_data_attributes(true, true, true)),
+            PropertyDescriptor::data(
+                url.as_value(),
+                PropertyFlags::from_data_attributes(true, true, true),
+            ),
         )
     }
 
@@ -286,8 +290,10 @@ impl Host for TestHost {
         _parameter_args: &[Handle<Value>],
         _body_arg: Handle<Value>,
     ) -> EvalResult<bool> {
-        let parameters: Vec<String> =
-            parameters.iter().map(|parameter| parameter.format().unwrap()).collect();
+        let parameters: Vec<String> = parameters
+            .iter()
+            .map(|parameter| parameter.format().unwrap())
+            .collect();
         self.0.compile_string_calls.borrow_mut().push(format!(
             "{kind:?}|{}|{}|{}",
             code.format().unwrap(),
@@ -304,8 +310,13 @@ impl Host for TestHost {
         operation: embed::PromiseRejectionOperation,
     ) {
         // Must not allocate: only read the rejection reason, a small integer in these tests
-        let reason = promise.rejected_value().map_or(-1, |reason| reason.as_smi());
-        self.0.rejections.borrow_mut().push(format!("{operation:?} {reason}"));
+        let reason = promise
+            .rejected_value()
+            .map_or(-1, |reason| reason.as_smi());
+        self.0
+            .rejections
+            .borrow_mut()
+            .push(format!("{operation:?} {reason}"));
     }
 
     fn interrupt(&self, _: Context) -> bool {
@@ -333,7 +344,10 @@ impl Host for TestHost {
     ) -> EvalResult<Option<PropertyDescriptor>> {
         assert_eq!(handler, PROXY_HANDLER);
         let name = key_name(cx, key);
-        self.0.proxy_calls.borrow_mut().push(format!("getOwnProperty {name}"));
+        self.0
+            .proxy_calls
+            .borrow_mut()
+            .push(format!("getOwnProperty {name}"));
 
         if name == "magic" {
             let flags = PropertyFlags::from_data_attributes(false, true, true);
@@ -352,7 +366,10 @@ impl Host for TestHost {
         _: PropertyDescriptor,
     ) -> EvalResult<bool> {
         let name = key_name(cx, key);
-        self.0.proxy_calls.borrow_mut().push(format!("defineProperty {name}"));
+        self.0
+            .proxy_calls
+            .borrow_mut()
+            .push(format!("defineProperty {name}"));
         Ok(false)
     }
 
@@ -450,7 +467,8 @@ fn get_number(cx: Context, object: Handle<ObjectValue>, name: &str) -> f64 {
 fn define_global(cx: Context, realm: Handle<Realm>, name: &str, value: Handle<Value>) {
     let global = realm.global_object().as_object();
     let key = key(cx, name);
-    let desc = PropertyDescriptor::data(value, PropertyFlags::from_data_attributes(true, true, true));
+    let desc =
+        PropertyDescriptor::data(value, PropertyFlags::from_data_attributes(true, true, true));
     define_property_or_throw(cx, global, key, desc).unwrap();
 }
 
@@ -482,7 +500,10 @@ fn new_marker_object(cx: Context, marker: f64) -> Value {
     embed::with_realm(cx, realm, |cx| {
         let object = ordinary_object_create(cx).unwrap();
         let key = key(cx, "marker");
-        let desc = PropertyDescriptor::data(cx.number(marker), PropertyFlags::from_data_attributes(true, true, true));
+        let desc = PropertyDescriptor::data(
+            cx.number(marker),
+            PropertyFlags::from_data_attributes(true, true, true),
+        );
         define_property_or_throw(cx, object, key, desc).unwrap();
         *object.as_value()
     })
@@ -506,7 +527,10 @@ fn host_object_does_not_move_but_its_slot_target_does() {
 
     // The host object is only reachable through a host root, the ordinary object only through the
     // host object's reserved slot.
-    recorder.cell_roots.borrow_mut().push(host_object.as_ptr().cast());
+    recorder
+        .cell_roots
+        .borrow_mut()
+        .push(host_object.as_ptr().cast());
     embed::set_reserved_slot(host_object, 0, new_marker_object(cx, 7.0));
 
     let mut previous_slot_address = embed::reserved_slot(host_object, 0).as_raw_bits();
@@ -570,7 +594,8 @@ fn check_gc_from_finalizer(configure: impl Fn(&Recorder)) {
     {
         handle_scope_guard!(cx);
         let realm = cx.initial_realm();
-        let result = eval(cx, realm, "let a = []; for (let i = 0; i < 10000; i++) a.push({ i }); a.length");
+        let result =
+            eval(cx, realm, "let a = []; for (let i = 0; i < 10000; i++) a.push({ i }); a.length");
         assert_eq!(result.as_number(), 10000.0);
     }
     embed::gc(cx);
@@ -607,7 +632,10 @@ fn finalizer_runs_once_for_dead_host_objects_only() {
         (dead.as_ptr() as usize, *live)
     };
 
-    recorder.cell_roots.borrow_mut().push(live_object.as_ptr().cast());
+    recorder
+        .cell_roots
+        .borrow_mut()
+        .push(live_object.as_ptr().cast());
 
     for _ in 0..5 {
         embed::gc(cx);
@@ -635,9 +663,15 @@ fn root_slots_keep_objects_alive_and_are_updated() {
     let value = new_marker_object(cx, 11.0);
     recorder.value_roots.borrow_mut().push(value.as_raw_bits());
     recorder.value_roots.borrow_mut().push(0); // Uninitialized slots are skipped
-    recorder.value_roots.borrow_mut().push(Value::smi(3).as_raw_bits());
+    recorder
+        .value_roots
+        .borrow_mut()
+        .push(Value::smi(3).as_raw_bits());
     let cell = new_marker_object(cx, 22.0);
-    recorder.cell_roots.borrow_mut().push(cell.as_pointer().as_ptr().cast());
+    recorder
+        .cell_roots
+        .borrow_mut()
+        .push(cell.as_pointer().as_ptr().cast());
 
     let before = (recorder.value_roots.borrow()[0], recorder.cell_roots.borrow()[0] as usize);
     embed::gc(cx);
@@ -664,7 +698,10 @@ fn trace_hook_reports_host_object_fields() {
         handle_scope_guard!(cx);
         *new_test_host_object(cx, HostFlags::HAS_TRACE, 0)
     };
-    recorder.cell_roots.borrow_mut().push(host_object.as_ptr().cast());
+    recorder
+        .cell_roots
+        .borrow_mut()
+        .push(host_object.as_ptr().cast());
 
     let field = new_marker_object(cx, 33.0);
     recorder
@@ -690,16 +727,25 @@ fn weak_pointers_are_cleared_moved_or_kept() {
     // Each object is registered right after it is created, since any allocation may run a GC.
     // The live ordinary object and the live host object also get strong roots.
     let dead = new_marker_object(cx, 1.0);
-    recorder.weak_cells.borrow_mut().push(dead.as_pointer().as_ptr().cast());
+    recorder
+        .weak_cells
+        .borrow_mut()
+        .push(dead.as_pointer().as_ptr().cast());
 
     let live = new_marker_object(cx, 2.0);
     recorder.value_roots.borrow_mut().push(live.as_raw_bits());
-    recorder.weak_cells.borrow_mut().push(live.as_pointer().as_ptr().cast());
+    recorder
+        .weak_cells
+        .borrow_mut()
+        .push(live.as_pointer().as_ptr().cast());
 
     let (host_object, dead_host_address) = {
         handle_scope_guard!(cx);
         let host_object = *new_test_host_object(cx, HostFlags::empty(), 0);
-        recorder.cell_roots.borrow_mut().push(host_object.as_ptr().cast());
+        recorder
+            .cell_roots
+            .borrow_mut()
+            .push(host_object.as_ptr().cast());
         let dead_host_object = *new_test_host_object(cx, HostFlags::HAS_FINALIZE, 1);
         (host_object, dead_host_object.as_ptr() as usize)
     };
@@ -764,8 +810,13 @@ fn native_construct(cx: Context, call: &mut NativeCall) -> Result<(), Option<Val
     let object = ordinary_object_create(cx).unwrap();
     let value = call.arg(0).to_handle(cx);
     let key = key(cx, "value");
-    define_property_or_throw(cx, object, key, PropertyDescriptor::data(value, PropertyFlags::from_data_attributes(true, true, true)))
-        .unwrap();
+    define_property_or_throw(
+        cx,
+        object,
+        key,
+        PropertyDescriptor::data(value, PropertyFlags::from_data_attributes(true, true, true)),
+    )
+    .unwrap();
 
     call.set_return_value(*object.as_value());
     Ok(())
@@ -919,7 +970,11 @@ fn htmldda_host_objects_emulate_undefined() {
     let htmldda = new_test_host_object(cx, HostFlags::IS_HTMLDDA, 0);
     let plain = new_test_host_object(cx, HostFlags::empty(), 0);
 
-    assert!(embed::host_flags(*htmldda).unwrap().contains(HostFlags::IS_HTMLDDA));
+    assert!(
+        embed::host_flags(*htmldda)
+            .unwrap()
+            .contains(HostFlags::IS_HTMLDDA)
+    );
     assert!(htmldda.is_htmldda());
     assert!(!plain.is_htmldda(), "only the flagged object carries the slot");
 
@@ -953,7 +1008,11 @@ fn resolve_hook_defines_global_property_lazily() {
             .unwrap();
     assert!(embed::is_host_object(*global));
     assert_eq!(embed::host_class(*global), Some(TEST_CLASS));
-    assert!(embed::host_flags(*global).unwrap().contains(HostFlags::IS_GLOBAL));
+    assert!(
+        embed::host_flags(*global)
+            .unwrap()
+            .contains(HostFlags::IS_GLOBAL)
+    );
     assert!(embed::global_of_realm(*realm).ptr_eq(&global));
     assert!(embed::realm_of_object(cx, *global).ptr_eq(&realm));
 
@@ -1147,7 +1206,8 @@ fn context_of_host_objects_and_ordinary_objects() {
     let (cx, _) = new_context();
 
     let host_object = new_test_host_object(cx, HostFlags::empty(), 0);
-    let ordinary = embed::with_realm(cx, cx.initial_realm(), |cx| ordinary_object_create(cx).unwrap());
+    let ordinary =
+        embed::with_realm(cx, cx.initial_realm(), |cx| ordinary_object_create(cx).unwrap());
 
     let host_cx = embed::context_of(host_object.as_ptr().cast());
     let ordinary_cx = embed::context_of(ordinary.as_ptr().cast());
@@ -1171,7 +1231,10 @@ fn weak_map_with_host_object_keys() {
         handle_scope_guard!(cx);
         *new_test_host_object(cx, HostFlags::empty(), 0)
     };
-    recorder.cell_roots.borrow_mut().push(key_object.as_ptr().cast());
+    recorder
+        .cell_roots
+        .borrow_mut()
+        .push(key_object.as_ptr().cast());
 
     {
         handle_scope_guard!(cx);
@@ -1224,17 +1287,16 @@ fn growing_gc_keeps_host_objects_in_place() {
         handle_scope_guard!(cx);
         *new_test_host_object(cx, HostFlags::empty(), 1)
     };
-    recorder.cell_roots.borrow_mut().push(host_object.as_ptr().cast());
+    recorder
+        .cell_roots
+        .borrow_mut()
+        .push(host_object.as_ptr().cast());
     embed::set_reserved_slot(host_object, 0, new_marker_object(cx, 3.0));
 
     let heap_size_before = cx.heap.heap_size();
 
     // Allocate enough live data to force the heap to grow
-    eval(
-        cx,
-        realm,
-        "var keep = []; for (var i = 0; i < 200000; i++) keep.push({ i });",
-    );
+    eval(cx, realm, "var keep = []; for (var i = 0; i < 200000; i++) keep.push({ i });");
 
     assert!(cx.heap.heap_size() > heap_size_before, "heap did not grow");
     assert_eq!(recorder.cell_roots.borrow()[0], host_object.as_ptr().cast());
@@ -1271,8 +1333,8 @@ fn failed_evaluation_returns_the_exception_and_unwinds() {
     // Line numbers start at the given line
     let stack = eval_string(cx, realm, "try { null.x } catch (e) { e.stack }");
     assert!(stack.contains("embed_test.js:1"), "{stack}");
-    let value = embed::evaluate_script(cx, realm, "\n\nnew Error('here').stack", "lines.js", 40)
-        .unwrap();
+    let value =
+        embed::evaluate_script(cx, realm, "\n\nnew Error('here').stack", "lines.js", 40).unwrap();
     let stack = embed::with_realm(cx, realm, |cx| to_string(cx, value).unwrap().format().unwrap());
     assert!(stack.contains("lines.js:42"), "{stack}");
 
@@ -1295,13 +1357,9 @@ fn compile_function_from_source() {
     )
     .unwrap();
 
-    let result = embed::call(
-        cx,
-        function.as_value(),
-        cx.undefined(),
-        &[cx.number(2.0), cx.number(3.0)],
-    )
-    .unwrap();
+    let result =
+        embed::call(cx, function.as_value(), cx.undefined(), &[cx.number(2.0), cx.number(3.0)])
+            .unwrap();
     assert_eq!(result.as_number(), 5.0);
 
     define_global(cx, realm, "add", function.as_value());
@@ -1310,7 +1368,9 @@ fn compile_function_from_source() {
     let thrower =
         embed::compile_function(cx, realm, None, &[], "\nthrow new Error('x');", "compiled.js", 10)
             .unwrap();
-    let error = embed::call(cx, thrower.as_value(), cx.undefined(), &[]).err().unwrap();
+    let error = embed::call(cx, thrower.as_value(), cx.undefined(), &[])
+        .err()
+        .unwrap();
     let stack = {
         let error = embed::exception_value(error);
         let stack = get(cx, error.as_object(), key(cx, "stack")).unwrap();
@@ -1382,7 +1442,9 @@ fn uncatchable_termination_skips_catch_and_finally() {
 
     // Calls and constructs from the host report it the same way
     let function = eval(cx, realm, "(function () { try { terminate(); } finally { mark('f'); } })");
-    let error = embed::call(cx, function, cx.undefined(), &[]).err().unwrap();
+    let error = embed::call(cx, function, cx.undefined(), &[])
+        .err()
+        .unwrap();
     assert!(embed::is_uncatchable(&error));
     let error = embed::construct(cx, function, &[], None).err().unwrap();
     assert!(embed::is_uncatchable(&error));
@@ -1408,7 +1470,9 @@ fn uncatchable_termination_in_a_promise_job() {
 
     let job = recorder.jobs.borrow_mut().remove(0);
     let job = HeapPtr::<ObjectValue>::from_ptr(job.cast()).to_handle();
-    let error = embed::call(cx, job.as_value(), cx.undefined(), &[]).err().unwrap();
+    let error = embed::call(cx, job.as_value(), cx.undefined(), &[])
+        .err()
+        .unwrap();
     assert!(embed::is_uncatchable(&error));
     assert_eq!(eval_string(cx, realm, "marks.length"), "0");
 
@@ -1564,7 +1628,9 @@ fn compile_without_running_then_execute_twice() {
     let realm = cx.initial_realm();
 
     // Syntax errors are reported at compile time, as SyntaxError objects
-    let error = embed::compile_script(cx, realm, "var = 1", "bad.js", 1).err().unwrap();
+    let error = embed::compile_script(cx, realm, "var = 1", "bad.js", 1)
+        .err()
+        .unwrap();
     let error = embed::exception_value(error);
     let message = embed::with_realm(cx, realm, |cx| to_string(cx, error).unwrap().format());
     assert!(message.unwrap().starts_with("SyntaxError"));
@@ -1671,7 +1737,11 @@ fn host_driven_module_graph() {
     let (cx, recorder) = new_context();
     let realm = cx.initial_realm();
 
-    add_module_source(&recorder, "./lazy.js", "export const y = 2; await null; export const late = 'tla';");
+    add_module_source(
+        &recorder,
+        "./lazy.js",
+        "export const y = 2; await null; export const late = 'tla';",
+    );
 
     let main = embed::compile_module(
         cx,
@@ -1710,10 +1780,7 @@ fn host_driven_module_graph() {
     embed::gc(cx);
     run_host_jobs(cx, &recorder);
 
-    assert_eq!(
-        embed::api::promise_state(promise),
-        embed::api::PromiseStatus::Fulfilled
-    );
+    assert_eq!(embed::api::promise_state(promise), embed::api::PromiseStatus::Fulfilled);
 
     let namespace = embed::module_namespace(cx, main).unwrap();
     assert_eq!(get_number(cx, namespace, "sum"), 3.0);
@@ -1739,15 +1806,20 @@ fn module_resolution_link_and_evaluation_errors() {
     // Missing export: a link-time SyntaxError
     add_module_source(&recorder, "./empty.js", "export const other = 1;");
     let bad_import =
-        embed::compile_module(cx, realm, "import { absent } from './empty.js';", "b.js", 1).unwrap();
+        embed::compile_module(cx, realm, "import { absent } from './empty.js';", "b.js", 1)
+            .unwrap();
     let error = embed::exception_value(embed::module_link(cx, bad_import).err().unwrap());
-    let message = embed::with_realm(cx, realm, |cx| to_string(cx, error).unwrap().format().unwrap());
+    let message =
+        embed::with_realm(cx, realm, |cx| to_string(cx, error).unwrap().format().unwrap());
     assert!(message.starts_with("SyntaxError"), "{message}");
 
     // Compile-time syntax error
-    let error = embed::compile_module(cx, realm, "export {", "c.js", 1).err().unwrap();
+    let error = embed::compile_module(cx, realm, "export {", "c.js", 1)
+        .err()
+        .unwrap();
     let error = embed::exception_value(error);
-    let message = embed::with_realm(cx, realm, |cx| to_string(cx, error).unwrap().format().unwrap());
+    let message =
+        embed::with_realm(cx, realm, |cx| to_string(cx, error).unwrap().format().unwrap());
     assert!(message.starts_with("SyntaxError"), "{message}");
 
     // Evaluation error rejects the evaluation promise
@@ -1755,10 +1827,7 @@ fn module_resolution_link_and_evaluation_errors() {
     embed::module_link(cx, throws).unwrap();
     let promise = embed::module_evaluate(cx, throws).unwrap();
     run_host_jobs(cx, &recorder);
-    assert_eq!(
-        embed::api::promise_state(promise),
-        embed::api::PromiseStatus::Rejected
-    );
+    assert_eq!(embed::api::promise_state(promise), embed::api::PromiseStatus::Rejected);
     let error = embed::module_evaluation_error(cx, throws).unwrap();
     assert_eq!(error.as_string().format().unwrap(), "boom");
 
@@ -1821,18 +1890,24 @@ fn dynamic_import_completed_later_by_the_host() {
     // GC while the host holds the pending imports
     embed::gc(cx);
 
-    add_module_source(&recorder, "./later.js", "import { w } from './dep2.js'; export const v = w * 5;");
+    add_module_source(
+        &recorder,
+        "./later.js",
+        "import { w } from './dep2.js'; export const v = w * 5;",
+    );
     add_module_source(&recorder, "./dep2.js", "export const w = 1;");
 
     // The host's rooted copies are updated by every GC, so read them right before each use
     let module = test_module(cx, &recorder, "./later.js").unwrap();
     let later = recorder.pending_imports.borrow()[0].1;
-    embed::finish_dynamic_import(cx, embed::DynamicImport::from_cell_ptr(later), Ok(module)).unwrap();
+    embed::finish_dynamic_import(cx, embed::DynamicImport::from_cell_ptr(later), Ok(module))
+        .unwrap();
 
     let mut cx_mut = cx;
     let reason = cx_mut.alloc_string("not found").unwrap().as_value();
     let fails = recorder.pending_imports.borrow()[1].1;
-    embed::finish_dynamic_import(cx, embed::DynamicImport::from_cell_ptr(fails), Err(reason)).unwrap();
+    embed::finish_dynamic_import(cx, embed::DynamicImport::from_cell_ptr(fails), Err(reason))
+        .unwrap();
     recorder.pending_imports.borrow_mut().clear();
 
     run_host_jobs(cx, &recorder);
@@ -1859,8 +1934,14 @@ fn native_capture_stack(cx: Context, call: &mut NativeCall) -> Result<(), Option
                 frame.function_name.as_deref().unwrap_or("?"),
                 frame.file_name.as_deref().unwrap_or("-"),
                 frame.line.map_or("-".to_owned(), |line| line.to_string()),
-                frame.column.map_or("-".to_owned(), |column| column.to_string()),
-                if frame.is_async_function { " async" } else { "" },
+                frame
+                    .column
+                    .map_or("-".to_owned(), |column| column.to_string()),
+                if frame.is_async_function {
+                    " async"
+                } else {
+                    ""
+                },
             )
         })
         .collect::<Vec<_>>()
@@ -1906,7 +1987,9 @@ fn capture_stack_and_error_stack_frames() {
 
     // The frames of an Error, also after its `stack` was formatted
     let error = eval(cx, realm, "function thrower() { return new Error('x'); }\nthrower()");
-    let frames = embed::error_stack_frames(cx, error.as_object(), 0).unwrap().unwrap();
+    let frames = embed::error_stack_frames(cx, error.as_object(), 0)
+        .unwrap()
+        .unwrap();
     assert_eq!(frames.len(), 2);
     assert_eq!(frames[0].function_name.as_deref(), Some("thrower"));
     assert_eq!(frames[0].line, Some(1));
@@ -1915,11 +1998,17 @@ fn capture_stack_and_error_stack_frames() {
 
     define_global(cx, realm, "err", error);
     eval(cx, realm, "err.stack");
-    let frames_after = embed::error_stack_frames(cx, error.as_object(), 1).unwrap().unwrap();
+    let frames_after = embed::error_stack_frames(cx, error.as_object(), 1)
+        .unwrap()
+        .unwrap();
     assert_eq!(frames_after, frames[..1]);
 
     let plain = eval(cx, realm, "({})");
-    assert!(embed::error_stack_frames(cx, plain.as_object(), 0).unwrap().is_none());
+    assert!(
+        embed::error_stack_frames(cx, plain.as_object(), 0)
+            .unwrap()
+            .is_none()
+    );
 
     cx.drop();
 }
@@ -1987,7 +2076,10 @@ fn heap_stats_report_semispace_and_host_space() {
         handle_scope_guard!(cx);
         *new_test_host_object(cx, HostFlags::empty(), 4)
     };
-    recorder.cell_roots.borrow_mut().push(host_object.as_ptr().cast());
+    recorder
+        .cell_roots
+        .borrow_mut()
+        .push(host_object.as_ptr().cast());
     {
         handle_scope_guard!(cx);
         new_test_host_object(cx, HostFlags::empty(), 0);
@@ -2224,7 +2316,10 @@ fn promises_never_move() {
     .unwrap();
 
     let promises = [script_promise, chained, api_promise.as_value(), api_chained];
-    let addresses: Vec<usize> = promises.iter().map(|p| p.as_pointer().as_ptr() as usize).collect();
+    let addresses: Vec<usize> = promises
+        .iter()
+        .map(|p| p.as_pointer().as_ptr() as usize)
+        .collect();
 
     for promise in &promises {
         let object = promise.as_object();
@@ -2255,7 +2350,12 @@ fn promises_never_move() {
     run_host_jobs(cx, &recorder);
     assert_eq!(eval_string(cx, realm, "log.sort().join(',')"), "api=5,p=21,rejected=7");
     let chained_promise = embed::api::as_promise(chained).unwrap();
-    assert_eq!(embed::api::promise_result(cx, chained_promise).unwrap().as_number(), 42.0);
+    assert_eq!(
+        embed::api::promise_result(cx, chained_promise)
+            .unwrap()
+            .as_number(),
+        42.0
+    );
     assert_eq!(
         embed::api::promise_state(embed::api::as_promise(eval(cx, realm, "rejected")).unwrap()),
         embed::api::PromiseStatus::Rejected
@@ -2324,7 +2424,11 @@ fn heap_growth_keeps_pinned_promises_in_place() {
     let address = first.as_pointer().as_ptr() as usize;
     let heap_size_before = cx.heap.heap_size();
 
-    eval(cx, realm, "var keepAlive = []; for (var i = 0; i < 200000; i++) keepAlive.push({ i });");
+    eval(
+        cx,
+        realm,
+        "var keepAlive = []; for (var i = 0; i < 200000; i++) keepAlive.push({ i });",
+    );
     assert!(cx.heap.heap_size() > heap_size_before, "heap did not grow");
 
     let first_after = get(cx, promises.as_object(), key(cx, "0")).unwrap();
@@ -2473,9 +2577,27 @@ fn swap_host_objects_swaps_contents_and_keeps_identity_hashes() {
     embed::set_reserved_slot(*b, 0, Value::smi(2));
     embed::with_realm(cx, realm, |cx| {
         let flags = PropertyFlags::from_data_attributes(true, true, true);
-        define_property_or_throw(cx, a, key(cx, "which"), PropertyDescriptor::data(cx.number(10.0), flags)).unwrap();
-        define_property_or_throw(cx, b, key(cx, "which"), PropertyDescriptor::data(cx.number(20.0), flags)).unwrap();
-        define_property_or_throw(cx, b, key(cx, "only_b"), PropertyDescriptor::data(cx.number(3.0), flags)).unwrap();
+        define_property_or_throw(
+            cx,
+            a,
+            key(cx, "which"),
+            PropertyDescriptor::data(cx.number(10.0), flags),
+        )
+        .unwrap();
+        define_property_or_throw(
+            cx,
+            b,
+            key(cx, "which"),
+            PropertyDescriptor::data(cx.number(20.0), flags),
+        )
+        .unwrap();
+        define_property_or_throw(
+            cx,
+            b,
+            key(cx, "only_b"),
+            PropertyDescriptor::data(cx.number(3.0), flags),
+        )
+        .unwrap();
     });
     let (mut ha, mut hb) = (*a, *b);
     let (hash_a, hash_b) = (ha.hash_code(), hb.hash_code());
@@ -2505,7 +2627,11 @@ fn host_globals_have_the_optional_annex_b_methods() {
     let (cx, _recorder) = new_context();
     handle_scope_guard!(cx);
     let (realm, _) = embed::new_global(cx, TEST_CLASS, HostFlags::empty(), 0).unwrap();
-    let expected = if cx.options.annex_b { "function function function bc" } else { "undefined undefined undefined" };
+    let expected = if cx.options.annex_b {
+        "function function function bc"
+    } else {
+        "undefined undefined undefined"
+    };
     let source = if cx.options.annex_b {
         "[typeof ''.substr, typeof escape, typeof new Date().getYear, 'abcd'.substr(1, 2)].join(' ')"
     } else {
@@ -2558,7 +2684,6 @@ fn trim_lazy_programs_frees_parse_arenas_and_keeps_functions_working() {
     // The generated functions behave as before.
     assert_eq!(eval_string(cx, realm, "String(lib.f(1) + lib.g(3))"), "9");
 }
-
 
 #[test]
 fn function_cache_reuses_renamed_functions_and_verifies() {
@@ -2642,7 +2767,11 @@ fn heap_size_follows_the_live_data() {
     assert!(churn.released_bytes > 0, "{churn:?}");
 
     // A growing live set grows the heap, keeping at least half of the semispace free.
-    eval(cx, realm, "globalThis.keep = []; for (let i = 0; i < 300000; i++) keep.push({ a: i, b: [i] });");
+    eval(
+        cx,
+        realm,
+        "globalThis.keep = []; for (let i = 0; i < 300000; i++) keep.push({ a: i, b: [i] });",
+    );
     let grown = embed::heap_stats(cx);
     assert!(grown.gc_grow_count > 0, "{grown:?}");
     assert!(grown.heap_size_bytes > MIN_HEAP, "{grown:?}");
@@ -2650,7 +2779,11 @@ fn heap_size_follows_the_live_data() {
     assert_eq!(eval_string(cx, realm, "String(keep.length + keep[299999].a)"), "599999");
 
     // When the live set is dropped the heap shrinks back as garbage keeps coming.
-    eval(cx, realm, "keep = null; for (let i = 0; i < 2000000; i++) { var o = { a: i, b: [i, i] }; }");
+    eval(
+        cx,
+        realm,
+        "keep = null; for (let i = 0; i < 2000000; i++) { var o = { a: i, b: [i, i] }; }",
+    );
     let shrunk = embed::heap_stats(cx);
     assert!(shrunk.gc_shrink_count > 0, "{shrunk:?}");
     assert!(shrunk.heap_size_bytes < grown.heap_size_bytes, "{shrunk:?}");
@@ -2660,19 +2793,29 @@ fn heap_size_follows_the_live_data() {
 #[test]
 fn census_counts_live_items_by_kind() {
     let options = OptionsBuilder::new().gc_census(true).build().unwrap();
-    let cx = ContextBuilder::new().set_options(Rc::new(options)).build().unwrap();
+    let cx = ContextBuilder::new()
+        .set_options(Rc::new(options))
+        .build()
+        .unwrap();
     embed::install_host(cx, Box::new(TestHost(Rc::new(Recorder::default())))).unwrap();
     handle_scope_guard!(cx);
     let realm = cx.initial_realm();
     assert!(embed::heap_census(cx).is_empty());
 
-    eval(cx, realm, "globalThis.keep = []; for (let i = 0; i < 1000; i++) keep.push([i]);");
+    eval(
+        cx,
+        realm,
+        "globalThis.keep = []; for (let i = 0; i < 1000; i++) keep.push([i]);",
+    );
     embed::gc(cx);
     let census = embed::heap_census(cx);
     let total: usize = census.iter().map(|entry| entry.bytes).sum();
     assert_eq!(total, embed::heap_stats(cx).last_live_bytes);
     assert!(census.windows(2).all(|pair| pair[0].bytes >= pair[1].bytes));
-    let arrays = census.iter().find(|entry| entry.kind == "ArrayObject").expect("arrays counted");
+    let arrays = census
+        .iter()
+        .find(|entry| entry.kind == "ArrayObject")
+        .expect("arrays counted");
     assert!(arrays.count >= 1001, "{census:?}");
 }
 
@@ -2693,7 +2836,12 @@ fn rejecting_a_settled_or_already_resolved_promise_does_nothing() {
         let rejected = embed::api::new_promise(cx, realm).unwrap();
         assert!(embed::api::promise_reject(cx, rejected, cx.number(3.0)));
         assert!(!embed::api::promise_reject(cx, rejected, cx.number(4.0)));
-        assert_eq!(embed::api::promise_result(cx, rejected).unwrap().as_number(), 3.0);
+        assert_eq!(
+            embed::api::promise_result(cx, rejected)
+                .unwrap()
+                .as_number(),
+            3.0
+        );
 
         // Pending but already resolved to another (pending) promise: still pending afterwards.
         let inner = embed::api::new_promise(cx, realm).unwrap();
@@ -2712,12 +2860,18 @@ fn compile_and_lazy_generation_times_are_recorded() {
     let source = "function f(x) { return x * 2; } var y = 0; for (let i = 0; i < 100; i++) y += i;";
     let script = embed::compile_script(cx, realm, source, "times.js", 1).unwrap();
     let times = embed::last_compile_times();
-    assert!(times.parse > std::time::Duration::ZERO && times.generate > std::time::Duration::ZERO, "{times:?}");
+    assert!(
+        times.parse > std::time::Duration::ZERO && times.generate > std::time::Duration::ZERO,
+        "{times:?}"
+    );
     let before = embed::lazy_generate_time();
     embed::execute_compiled(cx, script).unwrap();
     assert_eq!(eval_string(cx, realm, "String(f(21))"), "42");
     let after = embed::lazy_generate_time();
-    assert!(after.functions > before.functions, "f's stub was generated on its first call: {after:?}");
+    assert!(
+        after.functions > before.functions,
+        "f's stub was generated on its first call: {after:?}"
+    );
 
     let parsed = embed::parse_script_off_thread("var z = 1;", "off.js", 1).unwrap();
     embed::compile_parsed_script(cx, realm, parsed).unwrap();
@@ -2733,17 +2887,31 @@ fn large_allocation_grows_the_heap_for_live_data_too() {
     handle_scope_guard!(cx);
     let realm = cx.initial_realm();
 
-    eval(cx, realm, "globalThis.keep = []; for (let i = 0; i < 80000; i++) keep.push({ a: i, b: [i] });");
+    eval(
+        cx,
+        realm,
+        "globalThis.keep = []; for (let i = 0; i < 80000; i++) keep.push({ a: i, b: [i] });",
+    );
     embed::gc(cx);
     let before = embed::heap_stats(cx);
     assert_eq!(before.heap_size_bytes, MIN_HEAP, "{before:?}");
     assert!(before.last_live_bytes > 8 * 1024 * 1024, "{before:?}");
     assert!(before.last_live_bytes < 16 * 1024 * 1024, "{before:?}");
 
-    assert_eq!(eval_string(cx, realm, "globalThis.big = new ArrayBuffer(60 * 1024 * 1024); String(big.byteLength)"), "62914560");
+    assert_eq!(
+        eval_string(
+            cx,
+            realm,
+            "globalThis.big = new ArrayBuffer(60 * 1024 * 1024); String(big.byteLength)"
+        ),
+        "62914560"
+    );
     let after = embed::heap_stats(cx);
     assert!(after.heap_size_bytes > MIN_HEAP, "{after:?}");
-    assert!(after.semispace_capacity_bytes >= before.last_live_bytes + 60 * 1024 * 1024, "{after:?}");
+    assert!(
+        after.semispace_capacity_bytes >= before.last_live_bytes + 60 * 1024 * 1024,
+        "{after:?}"
+    );
     assert_eq!(eval_string(cx, realm, "String(keep.length + keep[80000 - 1].a)"), "159999");
 }
 
@@ -2886,7 +3054,6 @@ fn function_cache_disk_store_reopened_under_another_partition_gets_no_hits() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-
 /// Functions of many kinds whose bodies first run after their script has finished, so that they
 /// are parsed again on their own. `REPARSE_EXPECTED` is what `REPARSE_CALLS` evaluates to.
 const REPARSE_SCRIPT: &str = r#"
@@ -2985,7 +3152,9 @@ fn reparse_parses_functions_again_after_the_script_ran() {
 
 #[test]
 fn reparse_verify_mode_finds_no_difference_to_the_original_ast() {
-    let options = OptionsBuilder::new().lazy_reparse(true).lazy_reparse_verify(true);
+    let options = OptionsBuilder::new()
+        .lazy_reparse(true)
+        .lazy_reparse_verify(true);
     let (cx, _recorder) = new_context_with_options(options);
     handle_scope_guard!(cx);
     if !cx.options.lazy_functions {
@@ -3019,7 +3188,11 @@ fn source_text_lives_outside_the_heap_and_survives_collections() {
     let (cx, _recorder) = new_context();
     handle_scope_guard!(cx);
     let realm = cx.initial_realm();
-    eval(cx, realm, "function answer(a, b) {\n  return a + b; // the text\n}\nfunction thrower() {\n  throw new Error('x');\n}");
+    eval(
+        cx,
+        realm,
+        "function answer(a, b) {\n  return a + b; // the text\n}\nfunction thrower() {\n  throw new Error('x');\n}",
+    );
     assert!(cx.source_texts.len() >= 1);
     let text_bytes = cx.source_texts.text_bytes();
     assert!(text_bytes > 50, "{text_bytes}");
@@ -3045,7 +3218,8 @@ fn source_text_lives_outside_the_heap_and_survives_collections() {
 fn gc_stress_window_collects_often_and_keeps_values_intact() {
     // 64 KiB windows: a few MB of allocation must collect dozens of times, with the from-space poisoned each time, and
     // every value the script keeps must still read back right.
-    let (cx, _recorder) = new_context_with_options(OptionsBuilder::new().gc_stress_window(Some(64 << 10)));
+    let (cx, _recorder) =
+        new_context_with_options(OptionsBuilder::new().gc_stress_window(Some(64 << 10)));
     handle_scope_guard!(cx);
     let realm = cx.initial_realm();
     let before = embed::heap_stats(cx).gc_count;
@@ -3061,7 +3235,9 @@ fn gc_stress_window_collects_often_and_keeps_values_intact() {
 #[test]
 fn gc_verify_finds_no_bad_pointers_in_a_busy_heap() {
     // The verifier aborts the process on a bad pointer, so passing means every collection (before and after) checked clean.
-    let options = OptionsBuilder::new().gc_stress_window(Some(32 << 10)).gc_verify(true);
+    let options = OptionsBuilder::new()
+        .gc_stress_window(Some(32 << 10))
+        .gc_verify(true);
     let (cx, _recorder) = new_context_with_options(options);
     handle_scope_guard!(cx);
     let realm = cx.initial_realm();
@@ -3086,7 +3262,9 @@ fn gc_verify_finds_no_bad_pointers_in_a_busy_heap() {
 #[test]
 fn gc_verify_repairs_the_weak_edges_of_holders_the_named_walks_miss() {
     // The verifier aborts the process on a bad pointer, so passing means every collection (before and after) checked clean.
-    let options = OptionsBuilder::new().gc_stress_window(Some(32 << 10)).gc_verify(true);
+    let options = OptionsBuilder::new()
+        .gc_stress_window(Some(32 << 10))
+        .gc_verify(true);
     let (cx, _recorder) = new_context_with_options(options);
     handle_scope_guard!(cx);
     let realm = cx.initial_realm();
@@ -3151,7 +3329,10 @@ fn gc_verify_the_permanent_space_holds_no_item_whose_weak_slots_only_a_list_repa
 
     let (cx, _recorder) = new_context_with_options(OptionsBuilder::new());
     let items = items_of_space(cx.heap.permanent_heap_bounds());
-    let shapes = items.iter().filter(|(_, kind)| *kind == HeapItemKind::Shape).count();
+    let shapes = items
+        .iter()
+        .filter(|(_, kind)| *kind == HeapItemKind::Shape)
+        .count();
     assert!(shapes > 100, "the walk of the permanent space found only {shapes} shapes");
 
     let list_kinds = [
@@ -3187,7 +3368,9 @@ fn gc_verify_prototype_object_shapes_never_hold_a_transition_edge() {
         shape::Shape,
     };
 
-    let options = OptionsBuilder::new().gc_stress_window(Some(32 << 10)).gc_verify(true);
+    let options = OptionsBuilder::new()
+        .gc_stress_window(Some(32 << 10))
+        .gc_verify(true);
     let (cx, _recorder) = new_context_with_options(options);
     handle_scope_guard!(cx);
     let realm = cx.initial_realm();
@@ -3232,7 +3415,10 @@ fn gc_verify_prototype_object_shapes_never_hold_a_transition_edge() {
             assert!(shape.transitions_or_next_shape().is_none());
         }
     }
-    assert!(prototype_shapes >= 10, "only {prototype_shapes} prototype object shapes were made");
+    assert!(
+        prototype_shapes >= 10,
+        "only {prototype_shapes} prototype object shapes were made"
+    );
 }
 
 /// Run `setup`, root the container `container` reads off its result with a handle of this scope,
@@ -3264,7 +3450,12 @@ fn gc_verify_repairs_an_outgrown_weak_set_container() {
     use crate::runtime::intrinsics::weak_set_object::WeakSetObject;
     collect_with_an_outgrown_container(
         "var keep = [{}]; var ws = new WeakSet(); ws.add(keep[0]); ws",
-        |ws| ws.as_object().cast::<WeakSetObject>().weak_set_data().cast(),
+        |ws| {
+            ws.as_object()
+                .cast::<WeakSetObject>()
+                .weak_set_data()
+                .cast()
+        },
         "for (var i = 0; i < 64; i++) { var o = {}; keep.push(o); ws.add(o); }",
     );
 }
@@ -3274,7 +3465,12 @@ fn gc_verify_repairs_an_outgrown_weak_map_container() {
     use crate::runtime::intrinsics::weak_map_object::WeakMapObject;
     collect_with_an_outgrown_container(
         "var keep = [{}]; var wm = new WeakMap(); wm.set(keep[0], { v: 0 }); wm",
-        |wm| wm.as_object().cast::<WeakMapObject>().weak_map_data().cast(),
+        |wm| {
+            wm.as_object()
+                .cast::<WeakMapObject>()
+                .weak_map_data()
+                .cast()
+        },
         "for (var i = 0; i < 64; i++) { var o = {}; keep.push(o); wm.set(o, { v: i }); }",
     );
 }
@@ -3285,7 +3481,12 @@ fn gc_verify_repairs_outgrown_finalization_registry_cells() {
     collect_with_an_outgrown_container(
         "var keep = [{}]; var fr = new FinalizationRegistry(function () {});\
          fr.register(keep[0], 0, keep[0]); fr",
-        |fr| fr.as_object().cast::<FinalizationRegistryObject>().cells().cast(),
+        |fr| {
+            fr.as_object()
+                .cast::<FinalizationRegistryObject>()
+                .cells()
+                .cast()
+        },
         "for (var i = 0; i < 64; i++) { var o = {}; keep.push(o); fr.register(o, i, o); }",
     );
 }
@@ -3346,7 +3547,10 @@ fn associated_memory_makes_a_collection_due() {
     let retained = cx.heap.accounting().associated_bytes;
     assert_eq!(retained, threshold);
     let after = cx.heap.accounting().associated_threshold;
-    assert!(after == retained * 15 / 10 || after == retained * 30 / 10, "{after} for {retained}");
+    assert!(
+        after == retained * 15 / 10 || after == retained * 30 / 10,
+        "{after} for {retained}"
+    );
 
     // Removals stop at zero.
     embed::remove_associated_memory(cx, usize::MAX);
@@ -3371,7 +3575,11 @@ fn host_space_bytes_make_a_collection_due() {
         kept.push(new_test_host_object(cx, HostFlags::empty(), 8));
     }
     eval(cx, realm, "var c = [4, 5, 6];");
-    assert!(embed::heap_stats(cx).gc_count > start, "no collection after {} host objects", kept.len());
+    assert!(
+        embed::heap_stats(cx).gc_count > start,
+        "no collection after {} host objects",
+        kept.len()
+    );
 }
 
 #[test]
@@ -3402,7 +3610,10 @@ fn annex_b_contexts() -> Vec<(Context, Rc<Recorder>)> {
         new_context_with_options(OptionsBuilder::new().annex_b(true).lazy_functions(false)),
         new_context_with_options(OptionsBuilder::new().annex_b(true).lazy_functions(true)),
         new_context_with_options(
-            OptionsBuilder::new().annex_b(true).lazy_functions(true).lazy_reparse_verify(true),
+            OptionsBuilder::new()
+                .annex_b(true)
+                .lazy_functions(true)
+                .lazy_reparse_verify(true),
         ),
     ]
 }
@@ -3484,14 +3695,21 @@ fn annex_b_block_function_in_script_and_eval_code() {
         handle_scope_guard!(cx);
         let realm = cx.initial_realm();
         // GlobalDeclarationInstantiation step 12: a non-configurable global var
-        eval(cx, realm, "var annexBBefore = typeof annexBGlobal; { function annexBGlobal() { return 'g'; } }");
+        eval(
+            cx,
+            realm,
+            "var annexBBefore = typeof annexBGlobal; { function annexBGlobal() { return 'g'; } }",
+        );
         let source = "annexBBefore + ' ' + annexBGlobal() + ' ' + \
                       Object.getOwnPropertyDescriptor(globalThis, 'annexBGlobal').configurable";
         assert_eq!(eval_string(cx, realm, source), "undefined g false");
         // A global lexical declaration of another script: no var and no copy
         eval(cx, realm, "let annexBLexical = 1;");
         eval(cx, realm, "{ function annexBLexical() {} }");
-        assert_eq!(eval_string(cx, realm, "annexBLexical + ' ' + ('annexBLexical' in globalThis)"), "1 false");
+        assert_eq!(
+            eval_string(cx, realm, "annexBLexical + ' ' + ('annexBLexical' in globalThis)"),
+            "1 false"
+        );
         // EvalDeclarationInstantiation step 13: in a function, through the block's own binding
         // and a catch parameter of the eval code
         let source = "(function () { eval('{ function f() { f = 1; return 2; } } var r = f();'); \
@@ -3501,7 +3719,8 @@ fn annex_b_block_function_in_script_and_eval_code() {
         // A lexical binding of the caller between the eval and its var scope: no var, no copy
         let source = "(function () { { let f = 1; eval('{ function f() {} }'); return f + ' ' + typeof f; } })()";
         assert_eq!(eval_string(cx, realm, source), "1 number");
-        let source = "(function () { { let f = 1; eval('{ function f() {} }'); } return typeof f; })()";
+        let source =
+            "(function () { { let f = 1; eval('{ function f() {} }'); } return typeof f; })()";
         assert_eq!(eval_string(cx, realm, source), "undefined");
         // B.3.4: an eval in a catch block may declare the catch parameter's name
         let source = "(function () { try { throw 0; } catch (e) { eval('var e = 4; function e2() {}'); } return e; })()";
@@ -3526,8 +3745,8 @@ fn expect_syntax_error(cx: Context, realm: Handle<Realm>, source: &str) {
         Err(error) => error,
     };
     let error = embed::exception_value(error);
-    let message = embed::with_realm(cx, realm, |cx| to_string(cx, error).unwrap().format())
-        .unwrap();
+    let message =
+        embed::with_realm(cx, realm, |cx| to_string(cx, error).unwrap().format()).unwrap();
     assert!(message.starts_with("SyntaxError"), "`{source}`: {message}");
 }
 
@@ -3718,7 +3937,9 @@ fn private_elements_need_an_extensible_object() {
             eval_string(
                 cx,
                 realm,
-                &format!("var error; try {{ {source} }} catch (e) {{ error = e }} String(error instanceof TypeError)")
+                &format!(
+                    "var error; try {{ {source} }} catch (e) {{ error = e }} String(error instanceof TypeError)"
+                )
             ),
             "true",
             "{source}"

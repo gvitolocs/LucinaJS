@@ -3,11 +3,11 @@ use std::mem::size_of;
 use crate::{
     completion_value, extend_object,
     runtime::{
-        embed,
         Context, EvalResult, Handle, HeapItemKind, HeapPtr,
         abstract_operations::{call_object, construct, get_function_realm_no_error},
         alloc_error::AllocResult,
         builtin_function::BuiltinFunction,
+        embed,
         error::{type_error, type_error_value},
         gc::{AnyHeapItem, HeapItem, HeapVisitor},
         get,

@@ -197,7 +197,8 @@ impl HeapVisitor for Checker<'_> {
             return;
         }
         self.report.pointers += 1;
-        if self.permanent.is_start(p) || self.current.is_start(p) || self.host_objects.contains(&p) {
+        if self.permanent.is_start(p) || self.current.is_start(p) || self.host_objects.contains(&p)
+        {
             return;
         }
         let place = if self.permanent.range.contains(&p) {
@@ -253,8 +254,11 @@ fn traverse(
     embed::visit_roots_for_verify(cx, checker, |c: &mut Checker, what| c.label(what));
 
     for &(item, kind) in items {
-        checker.what =
-            if checker.permanent.range.contains(&item) { "permanent item" } else { "item" };
+        checker.what = if checker.permanent.range.contains(&item) {
+            "permanent item"
+        } else {
+            "item"
+        };
         checker.holder = item;
         checker.holder_kind = Some(kind);
         visit_pointers_for_kind(HeapPtr::from_ptr(item as *mut AnyHeapItem), checker, kind);
@@ -300,8 +304,10 @@ pub(crate) fn verify_heap(mut cx: Context, when: &str) {
     report.items = items.len();
 
     let headers = embed::host_headers_for_verify(cx);
-    let host_objects: FxHashSet<usize> =
-        headers.iter().map(|h| unsafe { h.as_ref() }.object().as_ptr() as usize).collect();
+    let host_objects: FxHashSet<usize> = headers
+        .iter()
+        .map(|h| unsafe { h.as_ref() }.object().as_ptr() as usize)
+        .collect();
 
     // A prototype object shape is detached from the transition tree and changes in place, so it
     // never holds a transition edge (it is repaired only by the pass over the swept spaces if it
@@ -371,7 +377,9 @@ pub(crate) fn verify_heap(mut cx: Context, when: &str) {
 
     let during = ALLOCS_DURING_GC.swap(0, Ordering::Relaxed);
     if during > 0 {
-        report.fail(when, || format!("{during} allocations during the collection (into the from-space)"));
+        report.fail(when, || {
+            format!("{during} allocations during the collection (into the from-space)")
+        });
     }
 
     let n = VERIFICATIONS.fetch_add(1, Ordering::Relaxed) + 1;

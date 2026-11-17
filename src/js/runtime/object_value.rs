@@ -10,11 +10,11 @@ use crate::{
         alloc_error::AllocResult,
         array_properties::ArrayProperties,
         bytecode::cache::CachedPropertyLocation,
-        embed::{HostObject, host as embed_host},
         collections::{
             BsIndexMapField, BsVec, BsVecField, FastHasher, VecInstance,
             index_map::IndexMapInstance, vec::ValueVec,
         },
+        embed::{HostObject, host as embed_host},
         error::type_error,
         eval_result::EvalResult,
         gc::{Handle, HeapInfo, HeapItem, HeapPtr, HeapVisitor, IsHeapItem, WithHeapItemKind},
@@ -939,7 +939,11 @@ impl Handle<ObjectValue> {
     fn host_proxy_handler(&self) -> Option<*const std::ffi::c_void> {
         let host_object = self.as_opt::<HostObject>()?;
         let header = host_object.header();
-        if header.is_proxy() { Some(header.handler()) } else { None }
+        if header.is_proxy() {
+            Some(header.handler())
+        } else {
+            None
+        }
     }
 }
 

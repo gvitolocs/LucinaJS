@@ -199,7 +199,8 @@ impl<'a> Parser<'a> {
         decl_name_scope: Option<ScopeNodeId>,
     ) {
         let info = ReparseInfo { kind, parser, decl_name_scope, analyzer: None };
-        self.scope_builder.set_reparse_info(scope.as_ref().id(), info);
+        self.scope_builder
+            .set_reparse_info(scope.as_ref().id(), info);
     }
 
     pub fn error<T>(&self, loc: Loc, error: ParseError) -> ParseResult<T> {
@@ -985,7 +986,11 @@ impl<'a> Parser<'a> {
             .filter(|id| is_decl && !id.scope.is_unresolved())
             .map(|id| id.scope.unwrap_resolved().id());
         if !is_decl || decl_name_scope.is_some() {
-            let kind = if is_decl { ReparseKind::Declaration } else { ReparseKind::Expression };
+            let kind = if is_decl {
+                ReparseKind::Declaration
+            } else {
+                ReparseKind::Expression
+            };
             self.record_reparse_info(scope, kind, outer_flags, decl_name_scope);
         }
 
@@ -1693,7 +1698,9 @@ impl<'a> Parser<'a> {
                 // parameter
                 if matches!(param, Pattern::Id(_)) {
                     let mut scope = scope;
-                    scope.as_mut().set_catch_parameter_is_binding_identifier(true);
+                    scope
+                        .as_mut()
+                        .set_catch_parameter_is_binding_identifier(true);
                 }
 
                 self.expect(Token::RightParen)?;
@@ -5230,8 +5237,12 @@ pub fn parse_script(
     // Create and prime parser
     let alloc = pcx.alloc();
     let lexer = Lexer::new(pcx.source(), &options, alloc);
-    let mut parser =
-        Parser::new(lexer, ScopeTree::new_global(options.clone(), pcx.scope_alloc()), options, alloc);
+    let mut parser = Parser::new(
+        lexer,
+        ScopeTree::new_global(options.clone(), pcx.scope_alloc()),
+        options,
+        alloc,
+    );
 
     let initial_state = parser.save();
     parser.advance()?;
@@ -5246,8 +5257,12 @@ pub fn parse_module(
     // Create and prime parser
     let alloc = pcx.alloc();
     let lexer = Lexer::new(pcx.source(), &options, alloc);
-    let mut parser =
-        Parser::new(lexer, ScopeTree::new_module(options.clone(), pcx.scope_alloc()), options, alloc);
+    let mut parser = Parser::new(
+        lexer,
+        ScopeTree::new_module(options.clone(), pcx.scope_alloc()),
+        options,
+        alloc,
+    );
     parser.advance()?;
 
     parser.parse_module()
@@ -5263,7 +5278,8 @@ pub fn parse_script_for_eval(
     // Create and prime parser
     let alloc = pcx.alloc();
     let lexer = Lexer::new(pcx.source(), &options, alloc);
-    let scope_tree = ScopeTree::new_eval(options.clone(), is_direct, in_derived_constructor, pcx.scope_alloc());
+    let scope_tree =
+        ScopeTree::new_eval(options.clone(), is_direct, in_derived_constructor, pcx.scope_alloc());
     let mut parser = Parser::new(lexer, scope_tree, options, alloc);
 
     // Inherit strict mode from context
@@ -5284,8 +5300,12 @@ pub fn parse_function_params_for_function_constructor(
     // Create and prime parser
     let alloc = pcx.alloc();
     let lexer = Lexer::new(pcx.source(), &options, alloc);
-    let mut parser =
-        Parser::new(lexer, ScopeTree::new_global(options.clone(), pcx.scope_alloc()), options, alloc);
+    let mut parser = Parser::new(
+        lexer,
+        ScopeTree::new_global(options.clone(), pcx.scope_alloc()),
+        options,
+        alloc,
+    );
 
     parser.allow_await = is_async;
     parser.allow_yield = is_generator;
@@ -5307,8 +5327,12 @@ pub fn parse_function_body_for_function_constructor(
     // Create and prime parser
     let alloc = pcx.alloc();
     let lexer = Lexer::new(pcx.source(), &options, alloc);
-    let mut parser =
-        Parser::new(lexer, ScopeTree::new_global(options.clone(), pcx.scope_alloc()), options, alloc);
+    let mut parser = Parser::new(
+        lexer,
+        ScopeTree::new_global(options.clone(), pcx.scope_alloc()),
+        options,
+        alloc,
+    );
 
     parser.allow_await = is_async;
     parser.allow_yield = is_generator;
@@ -5331,8 +5355,12 @@ pub fn parse_function_for_function_constructor(
     let source = pcx.source();
 
     let lexer = Lexer::new(source, &options, alloc);
-    let mut parser =
-        Parser::new(lexer, ScopeTree::new_global(options.clone(), pcx.scope_alloc()), options.clone(), alloc);
+    let mut parser = Parser::new(
+        lexer,
+        ScopeTree::new_global(options.clone(), pcx.scope_alloc()),
+        options.clone(),
+        alloc,
+    );
     parser.advance()?;
 
     let func_node = parser.parse_function_declaration(FunctionContext::TOPLEVEL)?;
@@ -5412,8 +5440,11 @@ pub fn reparse_function<'a>(
     let mut parser = Parser::new(lexer, scope_tree, options, alloc);
     parser.reparse = info.kind == ReparseKind::Declaration;
     parser.reparse_decl_scope = info.decl_name_scope;
-    parser.program_kind =
-        if info.parser.is_module { ProgramKind::Module } else { ProgramKind::Script };
+    parser.program_kind = if info.parser.is_module {
+        ProgramKind::Module
+    } else {
+        ProgramKind::Script
+    };
     parser.set_in_strict_mode(info.parser.in_strict_mode);
     parser.allow_await = info.parser.allow_await;
     parser.allow_yield = info.parser.allow_yield;

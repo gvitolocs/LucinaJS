@@ -9,8 +9,8 @@ use icu_collator::Collator;
 use icu_list::ListFormatter;
 use icu_locale::LocaleCanonicalizer;
 use icu_plurals::{PluralRules, PluralRulesWithRanges};
-use icu_time::zone::IanaParser;
 use icu_provider::prelude::DataError;
+use icu_time::zone::IanaParser;
 
 use super::collator_object::CollatorSettings;
 use super::date_time_format_core::{DateTimeRenderer, FieldSetError, FieldSetKey};
@@ -132,14 +132,17 @@ pub struct LocaleCache {
     /// The grouping is part of the key because a currency rendering is a decimal rendering of the
     /// digits, and the one entry per locale and grouping that the map above keeps is what it reads
     /// them through.
-    currency_renderers: RefCell<HashMap<(DataLocale, UseGrouping, CurrencySettings), Rc<CurrencyRenderer>>>,
+    currency_renderers:
+        RefCell<HashMap<(DataLocale, UseGrouping, CurrencySettings), Rc<CurrencyRenderer>>>,
 
     /// One relative-time pattern set per locale, `style` and unit, which are the three things
     /// 18.5.2 reads its tables by. A RelativeTimeFormat instance holds its resolved options and
     /// nothing else (ECMA-402 18.4), and the [[LocaleData]] those options name is one of the
     /// twenty-four markers the data crate bakes, so the loaded tables live here under the
     /// [`RelativeTimeSettings`] that reaches them and the unit of the call that asked.
-    relative_time_patterns: RefCell<HashMap<(DataLocale, RelativeTimeStyle, RelativeTimeUnit), Rc<RelativeTimePatterns>>>,
+    relative_time_patterns: RefCell<
+        HashMap<(DataLocale, RelativeTimeStyle, RelativeTimeUnit), Rc<RelativeTimePatterns>>,
+    >,
 
     /// The display name tables per locale and `style`, the two things 12.3.3's [[Fields]] is keyed
     /// by: `type` picks which of the three tables of [`DisplayNamesTables`] a name is read out of,
@@ -171,7 +174,9 @@ impl LocaleCache {
         }
 
         let collator = Rc::new(settings.build_collator());
-        self.collators.borrow_mut().insert(settings, Rc::clone(&collator));
+        self.collators
+            .borrow_mut()
+            .insert(settings, Rc::clone(&collator));
         collator
     }
 

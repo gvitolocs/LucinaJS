@@ -12,17 +12,6 @@
 
 use std::rc::Rc;
 
-use crate::extend_object;
-use crate::runtime::{
-    Context, Handle, Value,
-    error::{range_error, type_error},
-    eval_result::EvalResult,
-    gc::{HeapItem, HeapPtr, HeapVisitor},
-    intrinsics::intrinsics::Intrinsic,
-    object_value::ObjectValue,
-    ordinary_object::ObjectBuilder,
-};
-
 use brimstone_intl_data::IntlDataProvider;
 use icu_segmenter::{
     GraphemeClusterSegmenter, SentenceSegmenter, WordSegmenter,
@@ -33,6 +22,16 @@ use super::cache::DataLocale;
 use super::intl_object::canonicalize_locale_list_argument;
 use super::locale_negotiation::{Matcher, resolve_locale};
 use super::options::{coerce_options_to_object, get_enum_option, get_name_option};
+use crate::extend_object;
+use crate::runtime::{
+    Context, Handle, Value,
+    error::{range_error, type_error},
+    eval_result::EvalResult,
+    gc::{HeapItem, HeapPtr, HeapVisitor},
+    intrinsics::intrinsics::Intrinsic,
+    object_value::ObjectValue,
+    ordinary_object::ObjectBuilder,
+};
 
 /// [[SegmenterGranularity]] (https://tc39.es/ecma402/#sec-intl-segmenter-constructor), 19.1.1
 /// step 9, which step 8 read through GetOption over exactly these three names.
@@ -332,7 +331,11 @@ impl SegmenterObject {
         // keyword of a requested tag is kept and no option is looked up against a list of them.
         let resolved = resolve_locale(
             &requested_locales,
-            if matcher == "lookup" { Matcher::Lookup } else { Matcher::BestFit },
+            if matcher == "lookup" {
+                Matcher::Lookup
+            } else {
+                Matcher::BestFit
+            },
         );
 
         // Step 7: [[Locale]] is the tag the request asked for, reported as the caller spelled it.

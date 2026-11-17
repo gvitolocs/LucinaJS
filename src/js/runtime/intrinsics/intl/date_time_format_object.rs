@@ -20,6 +20,18 @@
 
 use std::rc::Rc;
 
+use super::cache::DataLocale;
+use super::date_time_format_core::{
+    AskedWidths, Components, DateTimePart, DateTimeRenderer, FieldSetError, FieldSetKey,
+    FormatZone, Formattable, HourCycle, NarrowWidths, Style, TemporalKind, TemporalSource,
+    TimePrecisionKey, TimeZoneNameStyle, Width, host_zone, hour_cycle_of_locale,
+    temporal_components,
+};
+use super::intl_object::canonicalize_locale_list_argument;
+use super::locale_negotiation::{
+    Matcher, RelevantExtensionKey, ResolvedLocale, resolve_locale_with_keys,
+};
+use super::options::{coerce_options_to_object, get_name_option, get_number_option};
 use crate::extend_object;
 use crate::runtime::{
     Context, Handle, HeapPtr, PropertyKey, Value,
@@ -34,18 +46,6 @@ use crate::runtime::{
     to_string,
     type_utilities::to_boolean,
 };
-
-use super::cache::DataLocale;
-use super::date_time_format_core::{
-    AskedWidths, Components, DateTimePart, DateTimeRenderer, FieldSetError, FieldSetKey, FormatZone,
-    Formattable, HourCycle, NarrowWidths, Style, TemporalKind, TemporalSource, TimePrecisionKey,
-    TimeZoneNameStyle, Width, host_zone, hour_cycle_of_locale, temporal_components,
-};
-use super::intl_object::canonicalize_locale_list_argument;
-use super::locale_negotiation::{
-    Matcher, RelevantExtensionKey, ResolvedLocale, resolve_locale_with_keys,
-};
-use super::options::{coerce_options_to_object, get_name_option, get_number_option};
 
 /// Which of the two groups 11.1.2's `required` says a caller needs, and so which of them the defaults
 /// of its step 31.5 may not leave out.
@@ -275,7 +275,8 @@ impl DateTimeFormatObject {
         if !initialized
             && ordinary_has_instance(
                 cx,
-                cx.get_intrinsic(Intrinsic::DateTimeFormatConstructor).into(),
+                cx.get_intrinsic(Intrinsic::DateTimeFormatConstructor)
+                    .into(),
                 date_time_format,
             )?
         {
@@ -348,7 +349,10 @@ impl DateTimeFormatObject {
     /// `[[IsPlain]]` - rather than from a number of milliseconds.
     pub fn format(&self, cx: Context, x: &Formattable) -> EvalResult<Vec<DateTimePart>> {
         let Some(resolved) = self.resolved() else {
-            return type_error(cx, "Intl.DateTimeFormat method called on an uninitialized instance");
+            return type_error(
+                cx,
+                "Intl.DateTimeFormat method called on an uninitialized instance",
+            );
         };
 
         let (renderer, moment) = self.moment(cx, &resolved, x)?;
@@ -366,7 +370,10 @@ impl DateTimeFormatObject {
     /// record made for either.
     pub fn format_to_string(&self, cx: Context, x: &Formattable) -> EvalResult<String> {
         let Some(resolved) = self.resolved() else {
-            return type_error(cx, "Intl.DateTimeFormat method called on an uninitialized instance");
+            return type_error(
+                cx,
+                "Intl.DateTimeFormat method called on an uninitialized instance",
+            );
         };
 
         let (renderer, moment) = self.moment(cx, &resolved, x)?;
@@ -461,8 +468,7 @@ impl DateTimeFormatObject {
                 }
             }
             Ends::Nanoseconds(renderer, start, start_zone, end, end_zone) => {
-                match renderer
-                    .format_range_nanoseconds_to_parts(start, &start_zone, end, &end_zone)
+                match renderer.format_range_nanoseconds_to_parts(start, &start_zone, end, &end_zone)
                 {
                     Some(parts) => Ok(parts),
                     None => range_error(cx, RANGE_FAILURE),
@@ -501,9 +507,7 @@ impl DateTimeFormatObject {
                 let start_zone = zone_at(cx, &resolved, &renderer, start)?;
                 let end_zone = zone_at(cx, &resolved, &renderer, end)?;
 
-                Ok(Ends::TimeValues(
-                    renderer, start, start_zone, end, end_zone,
-                ))
+                Ok(Ends::TimeValues(renderer, start, start_zone, end, end_zone))
             }
             (Formattable::Temporal(start), Formattable::Temporal(end)) => {
                 // 15.6.8 step 3's `SameTemporalType`, which comes before either end is read: the two
@@ -690,10 +694,12 @@ impl DateTimeFormatObject {
         // 12.11 are what decide whether a requested `-u-` keyword survives onto [[Locale]].
         let locale = cx.alloc_string(&resolved_locale.locale)?.as_value();
         let data_locale = data_locale(cx, &resolved_locale)?;
-        let calendar =
-            cx.alloc_string(&resolved_value(&resolved_locale, "ca", "gregory"))?.as_value();
-        let numbering_system =
-            cx.alloc_string(&resolved_value(&resolved_locale, "nu", "latn"))?.as_value();
+        let calendar = cx
+            .alloc_string(&resolved_value(&resolved_locale, "ca", "gregory"))?
+            .as_value();
+        let numbering_system = cx
+            .alloc_string(&resolved_value(&resolved_locale, "nu", "latn"))?
+            .as_value();
 
         // Steps 12 to 16: the hour cycle the format counts by. A `hour12` wins, and what it wins to
         // is the 12- or the 24-hour cycle of the locale's own - `resolvedLocaleData` of steps 14 and
@@ -705,16 +711,13 @@ impl DateTimeFormatObject {
         // entry for every relevant key and, with no `hours` data in this payload to ask, falls back
         // to the first of its allowed values. That would answer "h11" for a locale nobody had asked
         // about, which is the bug the table below exists to avoid.
-        let asked_hour_cycle = hc
-            .as_deref()
-            .and_then(HourCycle::parse)
-            .or_else(|| {
-                resolved_locale
-                    .extensions
-                    .iter()
-                    .find(|(key, _)| key == "hc")
-                    .and_then(|(_, value)| HourCycle::parse(value))
-            });
+        let asked_hour_cycle = hc.as_deref().and_then(HourCycle::parse).or_else(|| {
+            resolved_locale
+                .extensions
+                .iter()
+                .find(|(key, _)| key == "hc")
+                .and_then(|(_, value)| HourCycle::parse(value))
+        });
         let locale_cycle = asked_hour_cycle
             // The locale's own answer, of the table first and of its rendering for a language the
             // table does not name.
@@ -724,7 +727,8 @@ impl DateTimeFormatObject {
             None => locale_cycle,
             Some(twelve_hour) => {
                 let base = locale_cycle.unwrap_or_else(|| {
-                    (*instance).default_hour_cycle(cx, data_locale)
+                    (*instance)
+                        .default_hour_cycle(cx, data_locale)
                         // A locale whose rendering has no hour to read an answer off is a build
                         // without its patterns, which the caller's own default answers.
                         .unwrap_or(HourCycle::H23)
@@ -759,10 +763,7 @@ impl DateTimeFormatObject {
 
         // Steps 21 to 24: Table 16, read in the order of its rows. `hasExplicitFormatComponents` is
         // step 24.5's answer to whether the bag said any one of them.
-        let mut components = Components {
-            hour_cycle,
-            ..Components::default()
-        };
+        let mut components = Components { hour_cycle, ..Components::default() };
         let mut has_explicit_format_components = false;
 
         for component in Component::ALL {
@@ -781,14 +782,9 @@ impl DateTimeFormatObject {
         // Step 24.2, the one row of the table whose values are numbers: `GetNumberOption` over 1 to
         // 3, which is what makes `fractionalSecondDigits: 4` the RangeError it is rather than a
         // silent three.
-        if let Some(digits) = get_number_option(
-            cx,
-            options,
-            cx.names.fractional_second_digits(),
-            1.0,
-            3.0,
-            None,
-        )? {
+        if let Some(digits) =
+            get_number_option(cx, options, cx.names.fractional_second_digits(), 1.0, 3.0, None)?
+        {
             components.fractional_second_digits = Some(digits as u8);
             has_explicit_format_components = true;
         }
@@ -817,10 +813,12 @@ impl DateTimeFormatObject {
         )?;
 
         // Steps 26 to 29, the two shorthands.
-        let date_style = get_optional_name_option(cx, options, cx.names.date_style(), &STYLE_NAMES)?
-            .and_then(Style::parse);
-        let time_style = get_optional_name_option(cx, options, cx.names.time_style(), &STYLE_NAMES)?
-            .and_then(Style::parse);
+        let date_style =
+            get_optional_name_option(cx, options, cx.names.date_style(), &STYLE_NAMES)?
+                .and_then(Style::parse);
+        let time_style =
+            get_optional_name_option(cx, options, cx.names.time_style(), &STYLE_NAMES)?
+                .and_then(Style::parse);
 
         components.date_style = date_style;
         components.time_style = time_style;
@@ -1023,10 +1021,7 @@ fn resolved_value_opt(resolved: &ResolvedLocale, key: &str) -> Option<String> {
 /// What an option bag can ask for that no field set of this ICU4X generation renders, which is the
 /// loud answer rather than a format that shows other fields.
 fn unsupported_request<T>(cx: Context, error: FieldSetError) -> EvalResult<T> {
-    range_error(
-        cx,
-        &format!("Intl.DateTimeFormat cannot render the requested format: {error}"),
-    )
+    range_error(cx, &format!("Intl.DateTimeFormat cannot render the requested format: {error}"))
 }
 
 /// GetOption (https://tc39.es/ecma402/#sec-getoption), 9.2.11, for an option whose absence is
@@ -1049,7 +1044,11 @@ fn get_optional_name_option<'a>(
     let name = to_string(cx, value)?.to_wtf8_string()?;
 
     // Step 5, over the Values column of the row of Table 16 the caller is reading.
-    let Some(found) = values.iter().find(|allowed| name.as_str() == **allowed).copied() else {
+    let Some(found) = values
+        .iter()
+        .find(|allowed| name.as_str() == **allowed)
+        .copied()
+    else {
         let allowed = values.join(", ");
 
         return range_error(
@@ -1112,17 +1111,11 @@ fn get_extension_option(
     let name = to_string(cx, value)?.to_wtf8_string()?;
 
     let Ok(name) = std::str::from_utf8(name.as_bytes()) else {
-        return range_error(
-            cx,
-            "Intl.DateTimeFormat option is not a Unicode extension value",
-        );
+        return range_error(cx, "Intl.DateTimeFormat option is not a Unicode extension value");
     };
 
     if !is_unicode_type_value(name) {
-        return range_error(
-            cx,
-            "Intl.DateTimeFormat option is not a Unicode extension value",
-        );
+        return range_error(cx, "Intl.DateTimeFormat option is not a Unicode extension value");
     }
 
     Ok(Some(name.to_owned()))
@@ -1172,11 +1165,7 @@ fn clip_time_value(cx: Context, number: f64) -> EvalResult<f64> {
         // the millisecond 0, not the -1 that a floor would say, and TimeClip answers -0𝔽 as +0𝔽.
         let truncated = number.trunc();
 
-        if truncated == 0.0 {
-            0.0
-        } else {
-            truncated
-        }
+        if truncated == 0.0 { 0.0 } else { truncated }
     };
 
     if clipped.is_nan() {

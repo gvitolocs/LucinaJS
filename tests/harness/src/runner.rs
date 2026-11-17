@@ -321,7 +321,11 @@ fn run_single_test(
         .lazy_reparse_verify(REPARSE_VERIFY.load(Ordering::Relaxed))
         .min_heap_size(HEAP_SIZE)
         .gc_verify(std::env::var("BS_GC_VERIFY").is_ok())
-        .gc_stress_window(std::env::var("BS_GC_STRESS").ok().and_then(|v| v.parse().ok()))
+        .gc_stress_window(
+            std::env::var("BS_GC_STRESS")
+                .ok()
+                .and_then(|v| v.parse().ok()),
+        )
         .build()
         .unwrap();
 
@@ -1054,7 +1058,13 @@ fn new_header_row() -> TableRow {
     ])
 }
 
-fn new_suite_row(suite: Suite, succeeded: u64, failed: u64, timed_out: u64, skipped: u64) -> TableRow {
+fn new_suite_row(
+    suite: Suite,
+    succeeded: u64,
+    failed: u64,
+    timed_out: u64,
+    skipped: u64,
+) -> TableRow {
     TableRow::new(vec![
         TableCell::new(suite.to_string(), Some(vec![BOLD]), CellAlignment::Left),
         TableCell::simple(succeeded.to_string()),

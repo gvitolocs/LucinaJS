@@ -5,22 +5,16 @@
 //! The instance, the reading of its options and the plural rules themselves are
 //! [`super::plural_rules_object`]; this file is only the methods a program calls.
 
-use crate::runtime::{
-    Context, Handle, Realm,
-    abstract_operations::create_data_property_or_throw,
-    alloc_error::AllocResult,
-    array_object::create_array_from_list,
-    error::type_error,
-    intrinsic_builder::IntrinsicBuilder,
-    intrinsics::intrinsics::Intrinsic,
-    object_value::ObjectValue,
-    ordinary_object::ordinary_object_create,
-};
-use crate::{intrinsic_methods, runtime_fn};
-
 use super::number_format_object::NumberFormatObject;
 use super::number_format_prototype::{report_number, report_str, report_value};
 use super::plural_rules_object::PluralRulesObject;
+use crate::runtime::{
+    Context, Handle, Realm, abstract_operations::create_data_property_or_throw,
+    alloc_error::AllocResult, array_object::create_array_from_list, error::type_error,
+    intrinsic_builder::IntrinsicBuilder, intrinsics::intrinsics::Intrinsic,
+    object_value::ObjectValue, ordinary_object::ordinary_object_create,
+};
+use crate::{intrinsic_methods, runtime_fn};
 
 /// %Intl.PluralRules.prototype% (https://tc39.es/ecma402/#sec-properties-of-the-intl-pluralrules-prototype-object),
 /// 17.3.
@@ -112,14 +106,39 @@ impl PluralRulesPrototype {
         report_value(cx, options, cx.names.locale(), locale)?;
         report_str(cx, options, cx.names.type_(), resolved.settings.kind.as_str())?;
         report_str(cx, options, cx.names.notation(), "standard")?;
-        report_number(cx, options, cx.names.minimum_integer_digits(), resolved.slots.minimum_integer_digits)?;
+        report_number(
+            cx,
+            options,
+            cx.names.minimum_integer_digits(),
+            resolved.slots.minimum_integer_digits,
+        )?;
         if resolved.slots.reports_fraction_digits {
-            report_number(cx, options, cx.names.minimum_fraction_digits(), resolved.slots.minimum_fraction_digits)?;
-            report_number(cx, options, cx.names.maximum_fraction_digits(), resolved.slots.maximum_fraction_digits)?;
+            report_number(
+                cx,
+                options,
+                cx.names.minimum_fraction_digits(),
+                resolved.slots.minimum_fraction_digits,
+            )?;
+            report_number(
+                cx,
+                options,
+                cx.names.maximum_fraction_digits(),
+                resolved.slots.maximum_fraction_digits,
+            )?;
         }
         if resolved.slots.reports_significant_digits {
-            report_number(cx, options, cx.names.minimum_significant_digits(), resolved.slots.minimum_significant_digits)?;
-            report_number(cx, options, cx.names.maximum_significant_digits(), resolved.slots.maximum_significant_digits)?;
+            report_number(
+                cx,
+                options,
+                cx.names.minimum_significant_digits(),
+                resolved.slots.minimum_significant_digits,
+            )?;
+            report_number(
+                cx,
+                options,
+                cx.names.maximum_significant_digits(),
+                resolved.slots.maximum_significant_digits,
+            )?;
         }
 
         // Step 5.2.1, for the row whose Property is "pluralCategories": the list of step 4, which is
@@ -136,12 +155,27 @@ impl PluralRulesPrototype {
             create_array_from_list(cx, &elements)?.into(),
         )?;
 
-        report_number(cx, options, cx.names.rounding_increment(), resolved.slots.rounding_increment.as_u32())?;
+        report_number(
+            cx,
+            options,
+            cx.names.rounding_increment(),
+            resolved.slots.rounding_increment.as_u32(),
+        )?;
         report_str(cx, options, cx.names.rounding_mode(), resolved.slots.rounding_mode.as_str())?;
         // [[ComputedRoundingPriority]], which is the "roundingPriority" of the option a caller would
         // have to pass to get the same rounding again.
-        report_str(cx, options, cx.names.rounding_priority(), resolved.slots.rounding_priority.as_str())?;
-        report_str(cx, options, cx.names.trailing_zero_display(), resolved.slots.trailing_zero_display.as_str())?;
+        report_str(
+            cx,
+            options,
+            cx.names.rounding_priority(),
+            resolved.slots.rounding_priority.as_str(),
+        )?;
+        report_str(
+            cx,
+            options,
+            cx.names.trailing_zero_display(),
+            resolved.slots.trailing_zero_display.as_str(),
+        )?;
 
         // Step 6.
         Ok(options.as_value())

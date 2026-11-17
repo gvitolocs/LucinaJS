@@ -19,6 +19,7 @@ use crate::{
     },
     handle_scope, impl_vec_instance, must_a,
     parser::{
+        ParsedProgram,
         analyze::{AnalyzedFunctionResult, AnalyzedProgramResult},
         ast::{self, AstPtr, AstStr, LabelId, ProgramKind, ResolvedScope, TaggedResolvedScope},
         loc::{NO_POS, Pos},
@@ -28,7 +29,6 @@ use crate::{
             NEW_TARGET_BINDING_NAME, STATIC_HOME_OBJECT_BINDING_NAME, ScopeNodeId, ScopeNodeKind,
             ScopeTree, THIS_NAME, VMLocation, VMScopeNode,
         },
-        ParsedProgram,
         source::Source,
     },
     runtime::{
@@ -38,8 +38,12 @@ use crate::{
         bytecode::{
             cache::CacheArray,
             constant_table::ConstantTable,
-            constant_table_builder::{ConstantTableBuilder, ConstantTableEntry, ConstantTableIndex, Prov},
-            exception_handlers::{ExceptionHandlerBuilder, ExceptionHandlers, ExceptionHandlersBuilder},
+            constant_table_builder::{
+                ConstantTableBuilder, ConstantTableEntry, ConstantTableIndex, Prov,
+            },
+            exception_handlers::{
+                ExceptionHandlerBuilder, ExceptionHandlers, ExceptionHandlersBuilder,
+            },
             fncache::{
                 self,
                 key::{FuncInfo, FuncKind, NameProv, NodeKind, UncacheableReason, Walk},
@@ -374,8 +378,15 @@ impl<'a> BytecodeProgramGenerator<'a> {
             emit_result.pending_functions,
         );
 
-        let program = self.lazy_program.as_ref().map_or(0, |program| Rc::as_ptr(program) as usize);
-        Ok(BytecodeScript { script_function: emit_result.bytecode_function, global_names, program })
+        let program = self
+            .lazy_program
+            .as_ref()
+            .map_or(0, |program| Rc::as_ptr(program) as usize);
+        Ok(BytecodeScript {
+            script_function: emit_result.bytecode_function,
+            global_names,
+            program,
+        })
     }
 
     /// Generate bytecode from the result of `parse_module`. Return the SourceTextModule which is
@@ -973,11 +984,14 @@ impl<'a> BytecodeProgramGenerator<'a> {
         let PendingFunction { func_node, scope, patch } = pending_function;
 
         // An exported function without a name is the anonymous default export
-        let is_anonymous_default_export = matches!(patch, Patch::ModuleScope { is_export: true, .. });
+        let is_anonymous_default_export =
+            matches!(patch, Patch::ModuleScope { is_export: true, .. });
 
         let function = if self.lazy_program.is_some() {
             match func_node.into_lazy() {
-                Ok(lazy_node) => self.gen_lazy_stub(lazy_node, scope, is_anonymous_default_export)?,
+                Ok(lazy_node) => {
+                    self.gen_lazy_stub(lazy_node, scope, is_anonymous_default_export)?
+                }
                 Err(func_node) => {
                     self.gen_function(func_node, scope, is_anonymous_default_export)?
                 }
@@ -1097,7 +1111,9 @@ impl<'a> BytecodeProgramGenerator<'a> {
                 // Function cache: compute the structural key and try a hit before generating.
                 // A realm without a partition gets no cache at all.
                 let fncache_partition = if self.cx.fn_cache.enabled {
-                    self.cx.fn_cache.partition_digest(self.realm.cache_partition())
+                    self.cx
+                        .fn_cache
+                        .partition_digest(self.realm.cache_partition())
                 } else {
                     None
                 };
@@ -1251,9 +1267,7 @@ impl<'a> BytecodeProgramGenerator<'a> {
                     (FuncKind::Expression, None, false, is_constructor, false)
                 }
                 PendingFunctionNode::Arrow { .. } => (FuncKind::Arrow, None, false, false, false),
-                PendingFunctionNode::Method { .. } => {
-                    (FuncKind::Method, None, false, false, false)
-                }
+                PendingFunctionNode::Method { .. } => (FuncKind::Method, None, false, false, false),
                 PendingFunctionNode::Constructor {
                     node: Some(_),
                     fields_info: None,
@@ -1309,8 +1323,13 @@ impl<'a> BytecodeProgramGenerator<'a> {
             }
             let (bytes, _) = writer.finish();
             // The re-encoded instruction must end where the old one did, inside the bytecode.
-            let end = fncache::patch_rules::patch_end(patch.offset, patch.len, bytes.len(), bytecode.len())
-                .ok_or(UncacheableReason::PatchWidthChanged)?;
+            let end = fncache::patch_rules::patch_end(
+                patch.offset,
+                patch.len,
+                bytes.len(),
+                bytecode.len(),
+            )
+            .ok_or(UncacheableReason::PatchWidthChanged)?;
             fncache::patch_rules::apply_patch(bytecode, &bytes, offset, end);
         }
         Ok(())
@@ -1350,7 +1369,10 @@ impl<'a> BytecodeProgramGenerator<'a> {
         let constant_table = if num_constants == 0 {
             None
         } else {
-            Some(ConstantTable::new(cx, constants, metadata).map_err(|_| UncacheableReason::InstantiateFailed)?)
+            Some(
+                ConstantTable::new(cx, constants, metadata)
+                    .map_err(|_| UncacheableReason::InstantiateFailed)?,
+            )
         };
 
         // Rebuild the exception handlers.
@@ -1376,12 +1398,13 @@ impl<'a> BytecodeProgramGenerator<'a> {
                 write_operand(&mut buffer, register.signed() as isize as usize);
             }
             Some(
-                ExceptionHandlers::new(cx, buffer, width).map_err(|_| UncacheableReason::InstantiateFailed)?,
+                ExceptionHandlers::new(cx, buffer, width)
+                    .map_err(|_| UncacheableReason::InstantiateFailed)?,
             )
         };
 
-        let caches =
-            CacheArray::new(cx, template.num_caches).map_err(|_| UncacheableReason::InstantiateFailed)?;
+        let caches = CacheArray::new(cx, template.num_caches)
+            .map_err(|_| UncacheableReason::InstantiateFailed)?;
 
         // Rebuild the source map, mapping (node ordinal, offset) onto the new function's positions.
         let mut source_positions: Vec<u8> = Vec::new();
@@ -1414,8 +1437,8 @@ impl<'a> BytecodeProgramGenerator<'a> {
             encode_varint(&mut source_positions, *bc_offset as usize);
             encode_varint(&mut source_positions, pos);
         }
-        let source_map =
-            BytecodeSourceMap::new(cx, &source_positions).map_err(|_| UncacheableReason::InstantiateFailed)?;
+        let source_map = BytecodeSourceMap::new(cx, &source_positions)
+            .map_err(|_| UncacheableReason::InstantiateFailed)?;
 
         // The name is computed exactly like generation does, from the pending function node.
         let func = func_node.ast_ptr().as_arena_ref();
@@ -1470,9 +1493,7 @@ impl<'a> BytecodeProgramGenerator<'a> {
                 FuncKind::Declaration => PendingFunctionNode::Declaration(func_ptr),
                 FuncKind::Expression | FuncKind::Arrow => {
                     let name = match n.name_prov {
-                        NameProv::Node(ordinal) => {
-                            fncache::template::node_text(walk, ordinal)
-                        }
+                        NameProv::Node(ordinal) => fncache::template::node_text(walk, ordinal),
                         _ => None,
                     };
                     if n.kind == FuncKind::Expression {
@@ -1486,10 +1507,12 @@ impl<'a> BytecodeProgramGenerator<'a> {
                         NameProv::Node(ordinal) => {
                             fncache::template::node_text(walk, ordinal).map(Wtf8Cow::Borrowed)
                         }
-                        NameProv::MethodKey(..) => {
-                            fncache::template::resolve_name(walk, n.name_prov, n.name_text.as_deref())
-                                .map(Wtf8Cow::Owned)
-                        }
+                        NameProv::MethodKey(..) => fncache::template::resolve_name(
+                            walk,
+                            n.name_prov,
+                            n.name_text.as_deref(),
+                        )
+                        .map(Wtf8Cow::Owned),
                         NameProv::Text => fncache::template::resolve_name(
                             walk,
                             n.name_prov,
@@ -1502,13 +1525,14 @@ impl<'a> BytecodeProgramGenerator<'a> {
                 }
                 FuncKind::Constructor => {
                     let class = walk
-                        .node::<ast::Class>(n.class_ordinal.ok_or(UncacheableReason::InstantiateFailed)?)
+                        .node::<ast::Class>(
+                            n.class_ordinal
+                                .ok_or(UncacheableReason::InstantiateFailed)?,
+                        )
                         .ok_or(UncacheableReason::InstantiateFailed)?;
                     let name = match n.name_prov {
-                        NameProv::Node(ordinal) => {
-                            fncache::template::node_text(walk, ordinal)
-                                .ok_or(UncacheableReason::InstantiateFailed)?
-                        }
+                        NameProv::Node(ordinal) => fncache::template::node_text(walk, ordinal)
+                            .ok_or(UncacheableReason::InstantiateFailed)?,
                         NameProv::Text => {
                             let text = fncache::template::resolve_name(
                                 walk,
@@ -1538,8 +1562,12 @@ impl<'a> BytecodeProgramGenerator<'a> {
             // Rebuild the scope chain the nested function is generated in.
             let mut chain = Rc::clone(scope);
             for ordinal in n.scope_chain.iter().rev() {
-                let s = walk.scope(*ordinal).ok_or(UncacheableReason::InstantiateFailed)?;
-                let vm_id = s.vm_scope_id().ok_or(UncacheableReason::InstantiateFailed)?;
+                let s = walk
+                    .scope(*ordinal)
+                    .ok_or(UncacheableReason::InstantiateFailed)?;
+                let vm_id = s
+                    .vm_scope_id()
+                    .ok_or(UncacheableReason::InstantiateFailed)?;
                 chain = Rc::new(ScopeStackNode { scope_id: vm_id, parent: Some(chain) });
             }
 
@@ -1573,8 +1601,9 @@ impl<'a> BytecodeProgramGenerator<'a> {
                     _ => {
                         let text = fncache::template::resolve_text(walk, *prov, None)
                             .ok_or(UncacheableReason::NameNotFound)?;
-                        let string = InternedStrings::get_generator_cache_wtf8_str(cx, text.as_str())
-                            .map_err(|_| UncacheableReason::InstantiateFailed)?;
+                        let string =
+                            InternedStrings::get_generator_cache_wtf8_str(cx, text.as_str())
+                                .map_err(|_| UncacheableReason::InstantiateFailed)?;
                         let key = PropertyKey::from_interned_string(cx, string.as_flat())
                             .map_err(|_| UncacheableReason::InstantiateFailed)?;
                         if !key.is_array_index() || key.as_array_index() != *value {
@@ -1591,100 +1620,115 @@ impl<'a> BytecodeProgramGenerator<'a> {
                 raw_values[index] = Value::from_raw_bits(*offset as u64);
                 (Handle::<Value>::from_fixed_non_heap_ptr(&raw_values[index]), false)
             }
-            ConstEntry::HeapItem { kind, prov, class_names, scope_names } => match kind {
-                HeapKind::BigInt => {
-                    let Prov::Node(o) = prov else { return Err(UncacheableReason::InstantiateFailed) };
-                    let lit = walk
-                        .node::<ast::BigIntLiteral>(*o)
-                        .ok_or(UncacheableReason::NameNotFound)?;
-                    let v = BigIntValue::new(cx, lit.value())
-                        .map_err(|_| UncacheableReason::InstantiateFailed)?;
-                    (v.to_handle().cast(), true)
-                }
-                HeapKind::RegExp => {
-                    let Prov::Node(o) = prov else { return Err(UncacheableReason::InstantiateFailed) };
-                    let lit = walk
-                        .node::<ast::RegExpLiteral>(*o)
-                        .ok_or(UncacheableReason::NameNotFound)?;
-                    let source = InternedStrings::get_generator_cache_wtf8_str(cx, lit.pattern)
-                        .map_err(|_| UncacheableReason::InstantiateFailed)?;
-                    let compiled = compile_regexp(cx, &lit.regexp, source)
-                        .map_err(|_| UncacheableReason::InstantiateFailed)?;
-                    (compiled.cast(), true)
-                }
-                HeapKind::TemplateObject => {
-                    let Prov::Node(o) = prov else { return Err(UncacheableReason::InstantiateFailed) };
-                    let lit = walk
-                        .node::<ast::TemplateLiteral>(*o)
-                        .ok_or(UncacheableReason::NameNotFound)?;
-                    let obj = generate_template_object(cx, self.realm, lit)
-                        .map_err(|_| UncacheableReason::InstantiateFailed)?;
-                    (obj.cast(), true)
-                }
-                HeapKind::ClassNames => {
-                    let Prov::ClassNames(_) = prov else { return Err(UncacheableReason::InstantiateFailed) };
-                    let desc = class_names.as_ref().ok_or(UncacheableReason::InstantiateFailed)?;
-                    let mut methods = Vec::with_capacity(desc.methods.len());
-                    for m in &desc.methods {
-                        let name = match &m.name_prov {
-                            Some(prov) => {
-                                let text = fncache::template::resolve_text(
-                                    walk,
-                                    *prov,
-                                    m.name_text.as_deref(),
-                                )
-                                .ok_or(UncacheableReason::NameNotFound)?;
-                                Some(
-                                    InternedStrings::get_generator_cache_wtf8_str(cx, text.as_str())
+            ConstEntry::HeapItem { kind, prov, class_names, scope_names } => {
+                match kind {
+                    HeapKind::BigInt => {
+                        let Prov::Node(o) = prov else {
+                            return Err(UncacheableReason::InstantiateFailed);
+                        };
+                        let lit = walk
+                            .node::<ast::BigIntLiteral>(*o)
+                            .ok_or(UncacheableReason::NameNotFound)?;
+                        let v = BigIntValue::new(cx, lit.value())
+                            .map_err(|_| UncacheableReason::InstantiateFailed)?;
+                        (v.to_handle().cast(), true)
+                    }
+                    HeapKind::RegExp => {
+                        let Prov::Node(o) = prov else {
+                            return Err(UncacheableReason::InstantiateFailed);
+                        };
+                        let lit = walk
+                            .node::<ast::RegExpLiteral>(*o)
+                            .ok_or(UncacheableReason::NameNotFound)?;
+                        let source = InternedStrings::get_generator_cache_wtf8_str(cx, lit.pattern)
+                            .map_err(|_| UncacheableReason::InstantiateFailed)?;
+                        let compiled = compile_regexp(cx, &lit.regexp, source)
+                            .map_err(|_| UncacheableReason::InstantiateFailed)?;
+                        (compiled.cast(), true)
+                    }
+                    HeapKind::TemplateObject => {
+                        let Prov::Node(o) = prov else {
+                            return Err(UncacheableReason::InstantiateFailed);
+                        };
+                        let lit = walk
+                            .node::<ast::TemplateLiteral>(*o)
+                            .ok_or(UncacheableReason::NameNotFound)?;
+                        let obj = generate_template_object(cx, self.realm, lit)
+                            .map_err(|_| UncacheableReason::InstantiateFailed)?;
+                        (obj.cast(), true)
+                    }
+                    HeapKind::ClassNames => {
+                        let Prov::ClassNames(_) = prov else {
+                            return Err(UncacheableReason::InstantiateFailed);
+                        };
+                        let desc = class_names
+                            .as_ref()
+                            .ok_or(UncacheableReason::InstantiateFailed)?;
+                        let mut methods = Vec::with_capacity(desc.methods.len());
+                        for m in &desc.methods {
+                            let name = match &m.name_prov {
+                                Some(prov) => {
+                                    let text = fncache::template::resolve_text(
+                                        walk,
+                                        *prov,
+                                        m.name_text.as_deref(),
+                                    )
+                                    .ok_or(UncacheableReason::NameNotFound)?;
+                                    Some(
+                                        InternedStrings::get_generator_cache_wtf8_str(
+                                            cx,
+                                            text.as_str(),
+                                        )
                                         .map_err(|_| UncacheableReason::InstantiateFailed)?
                                         .as_flat(),
-                                )
-                            }
-                            None => None,
-                        };
-                        methods.push(Method {
-                            name,
-                            is_static: m.is_static,
-                            is_getter: m.is_getter,
-                            is_setter: m.is_setter,
-                            is_private: m.is_private,
+                                    )
+                                }
+                                None => None,
+                            };
+                            methods.push(Method {
+                                name,
+                                is_static: m.is_static,
+                                is_getter: m.is_getter,
+                                is_setter: m.is_setter,
+                                is_private: m.is_private,
+                            });
+                        }
+                        let home_object = desc.home_object.map(|(scope_index, parent_depth)| {
+                            HomeObjectLocation { scope_index, parent_depth }
                         });
+                        let static_home_object =
+                            desc.static_home_object.map(|(scope_index, parent_depth)| {
+                                HomeObjectLocation { scope_index, parent_depth }
+                            });
+                        let cn = ClassNames::new(cx, &methods, home_object, static_home_object)
+                            .map_err(|_| UncacheableReason::InstantiateFailed)?;
+                        (cn.cast(), true)
                     }
-                    let home_object =
-                        desc.home_object.map(|(scope_index, parent_depth)| HomeObjectLocation {
-                            scope_index,
-                            parent_depth,
-                        });
-                    let static_home_object = desc
-                        .static_home_object
-                        .map(|(scope_index, parent_depth)| HomeObjectLocation {
-                            scope_index,
-                            parent_depth,
-                        });
-                    let cn = ClassNames::new(cx, &methods, home_object, static_home_object)
-                        .map_err(|_| UncacheableReason::InstantiateFailed)?;
-                    (cn.cast(), true)
+                    HeapKind::ScopeNames => {
+                        let Prov::ScopeNames(scope_ordinal) = prov else {
+                            return Err(UncacheableReason::InstantiateFailed);
+                        };
+                        let desc = scope_names.ok_or(UncacheableReason::InstantiateFailed)?;
+                        let scope = walk
+                            .scope(*scope_ordinal)
+                            .ok_or(UncacheableReason::InstantiateFailed)?;
+                        let vm_id = scope
+                            .vm_scope_id()
+                            .ok_or(UncacheableReason::InstantiateFailed)?;
+                        let vm_node = self.scope_tree.get_vm_node(vm_id);
+                        let names = BytecodeFunctionGenerator::gen_scope_name_strings(cx, vm_node)
+                            .map_err(|_| UncacheableReason::InstantiateFailed)?;
+                        let name_flags =
+                            BytecodeFunctionGenerator::gen_scope_name_flags(scope, self.scope_tree);
+                        let flags = ScopeFlags::from_bits_truncate(desc.flags);
+                        let sn = ScopeNames::new(cx, flags, &names, &name_flags)
+                            .map_err(|_| UncacheableReason::InstantiateFailed)?;
+                        (sn.cast(), true)
+                    }
+                    HeapKind::Symbol => (cx.symbols.fields_initializer().as_symbol().cast(), true),
+                    HeapKind::NestedFunction => (Handle::<AnyHeapItem>::dangling().cast(), true),
                 }
-                HeapKind::ScopeNames => {
-                    let Prov::ScopeNames(scope_ordinal) = prov else {
-                        return Err(UncacheableReason::InstantiateFailed)
-                    };
-                    let desc = scope_names.ok_or(UncacheableReason::InstantiateFailed)?;
-                    let scope = walk.scope(*scope_ordinal).ok_or(UncacheableReason::InstantiateFailed)?;
-                    let vm_id = scope.vm_scope_id().ok_or(UncacheableReason::InstantiateFailed)?;
-                    let vm_node = self.scope_tree.get_vm_node(vm_id);
-                    let names = BytecodeFunctionGenerator::gen_scope_name_strings(cx, vm_node)
-                        .map_err(|_| UncacheableReason::InstantiateFailed)?;
-                    let name_flags =
-                        BytecodeFunctionGenerator::gen_scope_name_flags(scope, self.scope_tree);
-                    let flags = ScopeFlags::from_bits_truncate(desc.flags);
-                    let sn = ScopeNames::new(cx, flags, &names, &name_flags)
-                        .map_err(|_| UncacheableReason::InstantiateFailed)?;
-                    (sn.cast(), true)
-                }
-                HeapKind::Symbol => (cx.symbols.fields_initializer().as_symbol().cast(), true),
-                HeapKind::NestedFunction => (Handle::<AnyHeapItem>::dangling().cast(), true),
-            },
+            }
         })
     }
 
@@ -1720,7 +1764,9 @@ impl<'a> BytecodeProgramGenerator<'a> {
         match (a.name(), b.name()) {
             (None, None) => {}
             (Some(x), Some(y)) => {
-                if x.as_flat().to_wtf8_string().as_bytes() != y.as_flat().to_wtf8_string().as_bytes() {
+                if x.as_flat().to_wtf8_string().as_bytes()
+                    != y.as_flat().to_wtf8_string().as_bytes()
+                {
                     return Err(line!());
                 }
             }
@@ -1783,9 +1829,7 @@ impl<'a> BytecodeProgramGenerator<'a> {
                 .map(|(node, patch, scope)| {
                     let (kind, node_ptr, is_base) = match node {
                         PendingFunctionNode::Declaration(n) => (0u8, func_addr(n), false),
-                        PendingFunctionNode::Expression { node, .. } => {
-                            (1, func_addr(node), false)
-                        }
+                        PendingFunctionNode::Expression { node, .. } => (1, func_addr(node), false),
                         PendingFunctionNode::Arrow { node, .. } => (2, func_addr(node), false),
                         PendingFunctionNode::Method { node, .. } => (3, func_addr(node), false),
                         PendingFunctionNode::Constructor { node, is_base, .. } => {
@@ -1804,7 +1848,9 @@ impl<'a> BytecodeProgramGenerator<'a> {
                                     n.as_arena_ref().id.as_ref().map(|id| id.name)
                                 }
                                 PendingFunctionNode::Constructor { .. } => None,
-                                other => other.ast_ptr().as_arena_ref().id.as_ref().map(|id| id.name),
+                                other => {
+                                    other.ast_ptr().as_arena_ref().id.as_ref().map(|id| id.name)
+                                }
                             };
                             own.or(node.default_name()).map(|n| n.as_bytes().to_vec())
                         }
@@ -1849,8 +1895,17 @@ impl<'a> BytecodeProgramGenerator<'a> {
     /// bits; heap items compare by kind and content where accessible.
     fn verify_values_equal(a: Value, b: Value) -> bool {
         if a.is_string() && b.is_string() {
-            return a.as_opt::<StringValue>().unwrap().as_flat().to_wtf8_string().as_bytes()
-                == b.as_opt::<StringValue>().unwrap().as_flat().to_wtf8_string().as_bytes();
+            return a
+                .as_opt::<StringValue>()
+                .unwrap()
+                .as_flat()
+                .to_wtf8_string()
+                .as_bytes()
+                == b.as_opt::<StringValue>()
+                    .unwrap()
+                    .as_flat()
+                    .to_wtf8_string()
+                    .as_bytes();
         }
         if a.is_pointer() && b.is_pointer() {
             let pa = a.as_pointer();
@@ -1926,8 +1981,7 @@ impl<'a> BytecodeProgramGenerator<'a> {
 
         // The limits checked when the function is generated that do not depend on its body are
         // checked now, so that they are reported when the program is compiled.
-        let (num_parameters, function_length) =
-            BytecodeFunctionGenerator::count_parameters(func);
+        let (num_parameters, function_length) = BytecodeFunctionGenerator::count_parameters(func);
         let num_local_registers = func.scope.as_ref().num_local_registers();
 
         if num_parameters > GenRegister::MAX_ARGUMENT_INDEX {
@@ -2070,7 +2124,8 @@ impl<'a> BytecodeProgramGenerator<'a> {
             };
             let mark = cx.lazy_functions.begin_collect();
             let from_original = Self::generate_lazy_node(cx, stub, info, original);
-            let detach_result = super::lazy::detach_collected(cx, mark, /* keep_original */ true);
+            let detach_result =
+                super::lazy::detach_collected(cx, mark, /* keep_original */ true);
             let from_original = from_original?;
             detach_result?;
             if let Err(at) = Self::compare_generated(generated, from_original) {
@@ -2123,7 +2178,9 @@ impl<'a> BytecodeProgramGenerator<'a> {
         match (a.name(), b.name()) {
             (None, None) => {}
             (Some(x), Some(y)) => {
-                if x.as_flat().to_wtf8_string().as_bytes() != y.as_flat().to_wtf8_string().as_bytes() {
+                if x.as_flat().to_wtf8_string().as_bytes()
+                    != y.as_flat().to_wtf8_string().as_bytes()
+                {
                     return Err(line!());
                 }
             }
@@ -2138,7 +2195,8 @@ impl<'a> BytecodeProgramGenerator<'a> {
             }
             _ => return Err(line!()),
         }
-        if a.caches_ptr().map(|c| c.as_slice().len()) != b.caches_ptr().map(|c| c.as_slice().len()) {
+        if a.caches_ptr().map(|c| c.as_slice().len()) != b.caches_ptr().map(|c| c.as_slice().len())
+        {
             return Err(line!());
         }
         match (a.source_map_ptr(), b.source_map_ptr()) {
@@ -2169,7 +2227,8 @@ impl<'a> BytecodeProgramGenerator<'a> {
                         continue;
                     }
                     let is_function = |v: Value| {
-                        v.is_pointer() && v.as_pointer().shape().kind() == HeapItemKind::BytecodeFunction
+                        v.is_pointer()
+                            && v.as_pointer().shape().kind() == HeapItemKind::BytecodeFunction
                     };
                     if is_function(va) || is_function(vb) {
                         if !(is_function(va) && is_function(vb)) {
@@ -3210,7 +3269,9 @@ impl<'a> BytecodeFunctionGenerator<'a> {
 
     fn add_string_constant(&mut self, str: &'static str) -> EmitResult<GenConstantIndex> {
         let string = self.get_cached_static_str(str)?.as_flat();
-        let constant_index = self.constant_table_builder.add_string(string, Prov::Intrinsic)?;
+        let constant_index = self
+            .constant_table_builder
+            .add_string(string, Prov::Intrinsic)?;
         Ok(ConstantIndex::new(constant_index))
     }
 
@@ -3814,20 +3875,13 @@ impl<'a> BytecodeFunctionGenerator<'a> {
             };
             let (kind, is_base, class_ordinal, name_text) = match node {
                 PendingFunctionNode::Declaration(_) => (FuncKind::Declaration, false, None, None),
-                PendingFunctionNode::Expression { .. } => {
-                    (FuncKind::Expression, false, None, None)
-                }
+                PendingFunctionNode::Expression { .. } => (FuncKind::Expression, false, None, None),
                 PendingFunctionNode::Arrow { .. } => (FuncKind::Arrow, false, None, None),
                 PendingFunctionNode::Method { .. } => (FuncKind::Method, false, None, None),
                 PendingFunctionNode::Constructor { is_base, class, name, .. } => {
                     let class_ordinal =
                         walk.ordinal_of(class.as_ref() as *const ast::Class as *const u8);
-                    (
-                        FuncKind::Constructor,
-                        *is_base,
-                        class_ordinal,
-                        Some(name.as_bytes().to_vec()),
-                    )
+                    (FuncKind::Constructor, *is_base, class_ordinal, Some(name.as_bytes().to_vec()))
                 }
                 PendingFunctionNode::ClassFieldsInitializer { .. }
                 | PendingFunctionNode::ClassStaticInitializer { .. } => {
@@ -3844,8 +3898,16 @@ impl<'a> BytecodeFunctionGenerator<'a> {
             {
                 return Err(UncacheableReason::NameNotFound);
             }
-            let name_text = if matches!(name_prov, NameProv::Text) { name_text } else { None };
-            let scope_chain = self.fncache_nested_scopes.get(i).cloned().unwrap_or_default();
+            let name_text = if matches!(name_prov, NameProv::Text) {
+                name_text
+            } else {
+                None
+            };
+            let scope_chain = self
+                .fncache_nested_scopes
+                .get(i)
+                .cloned()
+                .unwrap_or_default();
             nested.push(NestedEntry {
                 constant_index,
                 node_ordinal,
@@ -3876,7 +3938,8 @@ impl<'a> BytecodeFunctionGenerator<'a> {
         flags.set(BytecodeFunctionFlags::IS_ASYNC, self.is_async());
         flags.set(BytecodeFunctionFlags::IS_GENERATOR, self.is_generator());
 
-        let size = bytecode.len() + source_positions.len() + constants.len() * 16 + nested.len() * 32;
+        let size =
+            bytecode.len() + source_positions.len() + constants.len() * 16 + nested.len() * 32;
         let template = Template {
             bytecode: bytecode.to_vec(),
             source_map,
@@ -4522,10 +4585,16 @@ impl<'a> BytecodeFunctionGenerator<'a> {
         if !self.fncache_capture {
             return;
         }
-        let Some(walk) = self.fncache.clone() else { return };
+        let Some(walk) = self.fncache.clone() else {
+            return;
+        };
         let kind = if op >= 2 { 1u8 } else { 0u8 };
         let index = scope_index.unsigned().to_usize();
-        let Some(slot) = walk.ext_slot_ordinals.get(&(kind, scope_id, index)).copied() else {
+        let Some(slot) = walk
+            .ext_slot_ordinals
+            .get(&(kind, scope_id, index))
+            .copied()
+        else {
             return;
         };
         let depth = parent_depth.unsigned().to_usize();
@@ -4625,9 +4694,7 @@ impl<'a> BytecodeFunctionGenerator<'a> {
                 self.gen_store_global_identifier(id.name, value, pos)
             }
             ResolvedScope::UnresolvedDynamic => match reference {
-                Some(reference) => {
-                    self.gen_store_dynamic_reference(id.name, value, reference, pos)
-                }
+                Some(reference) => self.gen_store_dynamic_reference(id.name, value, reference, pos),
                 None => self.gen_store_dynamic_identifier(id.name, value, pos),
             },
             ResolvedScope::Resolved => {
@@ -4645,14 +4712,7 @@ impl<'a> BytecodeFunctionGenerator<'a> {
         value: GenRegister,
     ) -> EmitResult<()> {
         // Source position not needed since initialization cannot fail
-        self.gen_store_binding(
-            name,
-            binding,
-            value,
-            StoreFlags::INITIALIZATION,
-            NO_POS,
-            None,
-        )
+        self.gen_store_binding(name, binding, value, StoreFlags::INITIALIZATION, NO_POS, None)
     }
 
     fn gen_store_binding(
@@ -5837,9 +5897,8 @@ impl<'a> BytecodeFunctionGenerator<'a> {
         match call_coord(kind, !expr.arguments.is_empty(), at_statement_start) {
             CoordAt::Callee => expr.loc.start,
             CoordAt::Property => property_start.unwrap_or(expr.loc.start),
-            CoordAt::Paren => {
-                find_paren(self.source_file.contents_as_slice(), callee_loc.end).unwrap_or(expr.loc.start)
-            }
+            CoordAt::Paren => find_paren(self.source_file.contents_as_slice(), callee_loc.end)
+                .unwrap_or(expr.loc.start),
         }
     }
 
@@ -5980,9 +6039,10 @@ impl<'a> BytecodeFunctionGenerator<'a> {
 
         // Template objects are generated eagerly and stored in constant table
         let template_object = generate_template_object(self.cx, self.realm, &expr.quasi)?;
-        let template_object_index = self
-            .constant_table_builder
-            .add_heap_item(template_object.cast(), self.prov_node(expr.quasi.as_ref() as *const ast::TemplateLiteral as *const u8))?;
+        let template_object_index = self.constant_table_builder.add_heap_item(
+            template_object.cast(),
+            self.prov_node(expr.quasi.as_ref() as *const ast::TemplateLiteral as *const u8),
+        )?;
 
         // Pass the template argument as the first call argument
         let template_object_reg = self.register_allocator.allocate()?;
@@ -6440,8 +6500,7 @@ impl<'a> BytecodeFunctionGenerator<'a> {
                 // A ComputedPropertyName becomes a property key as soon as it is evaluated, before
                 // the value expression runs.
                 let key_pos = property.key.pos();
-                self.writer
-                    .to_property_key_instruction(key, key, key_pos);
+                self.writer.to_property_key_instruction(key, key, key_pos);
 
                 Property::Computed(key)
             } else {
@@ -8436,9 +8495,10 @@ impl<'a> BytecodeFunctionGenerator<'a> {
     }
 
     fn get_fields_initializer_symbol_constant_index(&mut self) -> EmitResult<GenConstantIndex> {
-        let constant_index = self
-            .constant_table_builder
-            .add_heap_item(self.cx.symbols.fields_initializer().as_symbol().cast(), Prov::Intrinsic)?;
+        let constant_index = self.constant_table_builder.add_heap_item(
+            self.cx.symbols.fields_initializer().as_symbol().cast(),
+            Prov::Intrinsic,
+        )?;
         Ok(ConstantIndex::new(constant_index))
     }
 
@@ -9023,8 +9083,7 @@ impl<'a> BytecodeFunctionGenerator<'a> {
 
                     // The property name of a keyed destructuring assignment is converted to a
                     // property key before the assignment target is evaluated.
-                    self.writer
-                        .to_property_key_instruction(key, key, key_pos);
+                    self.writer.to_property_key_instruction(key, key, key_pos);
 
                     Property::Computed(key, key_pos)
                 }
@@ -9532,7 +9591,9 @@ impl<'a> BytecodeFunctionGenerator<'a> {
 
         // A var scoped (top level) declaration is instantiated with its scope
         if hoist_target.id() == decl_scope.id()
-            || hoist_target.enabled_annex_b_function(id.name, decl_scope.id()).is_none()
+            || hoist_target
+                .enabled_annex_b_function(id.name, decl_scope.id())
+                .is_none()
         {
             return Ok(StmtCompletion::Normal);
         }
@@ -9895,9 +9956,12 @@ impl<'a> BytecodeFunctionGenerator<'a> {
             self.get_home_object_location(body_scope, &STATIC_HOME_OBJECT_BINDING_NAME)?;
 
         // ClassNames object is stored in the constant table
-        let home_object_loc = home_object.as_ref().map(|h| (h.scope_index, h.parent_depth));
-        let static_home_object_loc =
-            static_home_object.as_ref().map(|h| (h.scope_index, h.parent_depth));
+        let home_object_loc = home_object
+            .as_ref()
+            .map(|h| (h.scope_index, h.parent_depth));
+        let static_home_object_loc = static_home_object
+            .as_ref()
+            .map(|h| (h.scope_index, h.parent_depth));
         let class_names = ClassNames::new(self.cx, &methods, home_object, static_home_object)?;
         let class_prov = match self.prov_node(class as *const ast::Class as *const u8) {
             Prov::Node(ordinal) => Prov::ClassNames(ordinal),
@@ -9915,9 +9979,9 @@ impl<'a> BytecodeFunctionGenerator<'a> {
                         name_prov: *name_prov,
                         name_text: match name_prov {
                             // Verbatim text is only stored for intrinsic provenance
-                            Some(Prov::Intrinsic) => m
-                                .name
-                                .map(|name| name.to_wtf8_string().as_bytes().to_vec()),
+                            Some(Prov::Intrinsic) => {
+                                m.name.map(|name| name.to_wtf8_string().as_bytes().to_vec())
+                            }
                             _ => None,
                         },
                         is_static: m.is_static,
@@ -10050,7 +10114,9 @@ impl<'a> BytecodeFunctionGenerator<'a> {
             (Name::Computed(key_reg, method.key.loc().start), None)
         } else {
             match &method.key {
-                ast::Expression::Id(id) => (Name::Named(id.name), Some(self.prov_for_text(id.name))),
+                ast::Expression::Id(id) => {
+                    (Name::Named(id.name), Some(self.prov_for_text(id.name)))
+                }
                 ast::Expression::String(string) => {
                     (Name::Named(string.value), Some(self.prov_for_text(string.value)))
                 }
@@ -10520,7 +10586,11 @@ impl<'a> BytecodeFunctionGenerator<'a> {
         let name_flags = Self::gen_scope_name_flags(scope, self.scope_tree);
         let scope_names = ScopeNames::new(self.cx, flags, &names, &name_flags)?;
 
-        let scope_prov = match self.fncache.as_ref().and_then(|w| w.scope_ordinal_of(scope.id())) {
+        let scope_prov = match self
+            .fncache
+            .as_ref()
+            .and_then(|w| w.scope_ordinal_of(scope.id()))
+        {
             Some(ordinal) => Prov::ScopeNames(ordinal),
             None => Prov::Intrinsic,
         };
@@ -10528,8 +10598,10 @@ impl<'a> BytecodeFunctionGenerator<'a> {
             .constant_table_builder
             .add_heap_item(scope_names.cast(), scope_prov)?;
         if let Prov::ScopeNames(_) = scope_prov {
-            self.fncache_heap_details
-                .insert(scope_names_index, HeapDetail::ScopeNames(ScopeNamesDesc { flags: flags.bits() }));
+            self.fncache_heap_details.insert(
+                scope_names_index,
+                HeapDetail::ScopeNames(ScopeNamesDesc { flags: flags.bits() }),
+            );
         }
         let constant_index = ConstantIndex::new(scope_names_index);
 
@@ -12683,8 +12755,12 @@ impl LazyFunctionInfo {
         };
         let (variant, func_ptr, name) = match node {
             LazyFunctionNode::Declaration(node) => (0, *node, None),
-            LazyFunctionNode::Expression { node, name } => (1, *node, name.map(|n| n.to_owned_in(Global))),
-            LazyFunctionNode::Arrow { node, name } => (2, *node, name.map(|n| n.to_owned_in(Global))),
+            LazyFunctionNode::Expression { node, name } => {
+                (1, *node, name.map(|n| n.to_owned_in(Global)))
+            }
+            LazyFunctionNode::Arrow { node, name } => {
+                (2, *node, name.map(|n| n.to_owned_in(Global)))
+            }
             LazyFunctionNode::Method { node, name } => (
                 3,
                 *node,
@@ -12697,7 +12773,11 @@ impl LazyFunctionInfo {
 
         let func = func_ptr.as_ref();
         let scope = func.scope.as_ref();
-        let Some(info) = scope.reparse_info().filter(|info| info.is_complete()).copied() else {
+        let Some(info) = scope
+            .reparse_info()
+            .filter(|info| info.is_complete())
+            .copied()
+        else {
             return false;
         };
         let enclosing_scope = match func.name_scope() {

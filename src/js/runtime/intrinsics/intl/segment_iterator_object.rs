@@ -9,6 +9,7 @@
 //! boundary table, and so why 19.6.2.1's `next` costs one read rather than a fresh pass over the
 //! string.
 
+use super::segments_object::SegmentsObject;
 use crate::extend_object;
 use crate::runtime::{
     Context, Handle, Realm, Value,
@@ -23,8 +24,6 @@ use crate::runtime::{
     ordinary_object::ObjectBuilder,
 };
 use crate::{intrinsic_methods, runtime_fn};
-
-use super::segments_object::SegmentsObject;
 
 extend_object! {
     /// Properties of Segment Iterator Objects

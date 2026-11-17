@@ -13,6 +13,13 @@
 //! `firstDayOfWeek` and `numeric`. This build has all of them, because 15.2.2 gives it both "kf" and
 //! "kn" and the data of `brimstone_intl_data::locale_info` answers the rest.
 
+use super::locale_data::{
+    TimeZones, calendars_of_locale, collations_of_locale, hour_cycles_of_locale,
+    numbering_systems_of_locale, text_direction_of_locale, time_zones_of_locale,
+    week_info_of_locale,
+};
+use super::locale_negotiation::{add_likely_subtags, remove_likely_subtags};
+use super::locale_object::LocaleObject;
 use crate::runtime::{
     Context, Handle, Realm, Value,
     abstract_operations::{construct, create_data_property_or_throw},
@@ -26,14 +33,6 @@ use crate::runtime::{
     ordinary_object::ordinary_object_create,
 };
 use crate::{intrinsic_getter_methods, intrinsic_methods, runtime_fn};
-
-use super::locale_data::{
-    TimeZones, calendars_of_locale, collations_of_locale, hour_cycles_of_locale,
-    numbering_systems_of_locale, text_direction_of_locale, time_zones_of_locale,
-    week_info_of_locale,
-};
-use super::locale_negotiation::{add_likely_subtags, remove_likely_subtags};
-use super::locale_object::LocaleObject;
 
 /// %Intl.Locale.prototype% (https://tc39.es/ecma402/#sec-properties-of-the-intl-locale-prototype-object),
 /// 15.3: an ordinary object that is not an instance, so it has no [[InitializedLocale]] and every
@@ -236,7 +235,9 @@ impl LocalePrototype {
 
         // Step 3: loc.[[Locale]], which 15.1.1 step 36 wrote as the record's [[locale]]: the whole
         // canonicalized tag, extension and private use sequence included.
-        let tag = locale.locale().expect("the slot require_initialized checked");
+        let tag = locale
+            .locale()
+            .expect("the slot require_initialized checked");
 
         Ok(tag.to_handle(cx))
     }}
@@ -389,7 +390,9 @@ fn array_of_strings<'a, I: IntoIterator<Item = &'a str>>(
 /// [[Locale]] - and because a subclass's `maximize` returns a plain `Intl.Locale`, which is what
 /// naming %Intl.Locale% rather than the receiver in those steps means.
 fn construct_locale(mut cx: Context, tag: &str) -> EvalResult<Handle<Value>> {
-    let constructor = cx.initial_realm().get_intrinsic(Intrinsic::LocaleConstructor);
+    let constructor = cx
+        .initial_realm()
+        .get_intrinsic(Intrinsic::LocaleConstructor);
     let argument = cx.alloc_string(tag)?.as_value();
 
     // The `!` of the step: 15.1.1 cannot throw on a tag this engine produced and no options, so a

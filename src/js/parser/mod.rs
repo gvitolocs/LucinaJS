@@ -19,7 +19,7 @@ pub mod source;
 mod token;
 
 pub use context::ParseContext;
-pub use parsed_program::ParsedProgram;
 pub use parse_error::{LocalizedParseError, LocalizedParseErrors, ParseError, ParseResult};
+pub use parsed_program::ParsedProgram;
 pub use parser::{parse_module, parse_script, parse_script_for_eval};
 pub use printer::print_program;

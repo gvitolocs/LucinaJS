@@ -9,7 +9,6 @@ use crate::{
         array_object::create_array_from_list,
         intrinsic_builder::IntrinsicBuilder,
         intrinsics::{
-            intrinsics::Intrinsic,
             intl::{
                 collator_object::CollatorObject,
                 collator_options::{locale_matcher, resolve_collator},
@@ -17,6 +16,7 @@ use crate::{
                 locale_negotiation::supported_locales_of,
                 options::coerce_options_to_object,
             },
+            intrinsics::Intrinsic,
             rust_runtime::RuntimeFunction,
         },
         object_value::ObjectValue,

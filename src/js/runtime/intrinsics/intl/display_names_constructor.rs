@@ -9,6 +9,10 @@
 //! DateTimeFormat, DisplayNames, DurationFormat, ListFormat, Locale, NumberFormat, PluralRules,
 //! RelativeTimeFormat, Segmenter - and the eighth to exist in this build.
 
+use super::display_names_object::DisplayNamesObject;
+use super::intl_object::canonicalize_locale_list_argument;
+use super::locale_negotiation::{Matcher, supported_locales_of};
+use super::options::{coerce_options_to_object, get_name_option};
 use crate::runtime::{
     Context, Handle, Realm,
     alloc_error::AllocResult,
@@ -19,11 +23,6 @@ use crate::runtime::{
     object_value::ObjectValue,
 };
 use crate::{intrinsic_methods, runtime_fn};
-
-use super::display_names_object::DisplayNamesObject;
-use super::intl_object::canonicalize_locale_list_argument;
-use super::locale_negotiation::{Matcher, supported_locales_of};
-use super::options::{coerce_options_to_object, get_name_option};
 
 /// %Intl.DisplayNames% (https://tc39.es/ecma402/#sec-intl-displaynames-constructor), 12.1.
 pub struct DisplayNamesConstructor;
@@ -108,7 +107,11 @@ impl DisplayNamesConstructor {
 
         let supported = supported_locales_of(
             &requested_locales,
-            if matcher == "lookup" { Matcher::Lookup } else { Matcher::BestFit },
+            if matcher == "lookup" {
+                Matcher::Lookup
+            } else {
+                Matcher::BestFit
+            },
         );
 
         // 9.2.9 step 5: CreateArrayFromList, in the order the caller asked and with the tags as the

@@ -60,7 +60,8 @@ impl ParseContext {
     /// Bytes allocated for the AST arena, zero once it is dropped.
     pub fn ast_arena_bytes(&self) -> usize {
         // SAFETY: as in `alloc`.
-        unsafe { (*self.alloc.get()).as_deref() }.map_or(0, |a| a.allocated_bytes_including_metadata())
+        unsafe { (*self.alloc.get()).as_deref() }
+            .map_or(0, |a| a.allocated_bytes_including_metadata())
     }
 
     /// The arena of the scope tree.

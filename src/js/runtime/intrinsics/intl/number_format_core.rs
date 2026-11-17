@@ -1523,10 +1523,7 @@ impl SignAffixes {
 pub(crate) enum Rendered {
     /// NaN or one of the two infinities: 16.5.3 steps 2 to 4 replace the arithmetic with an
     /// implementation-defined word, which the renderer writes as its own part.
-    Special {
-        category: SignCategory,
-        kind: PartKind,
-    },
+    Special { category: SignCategory, kind: PartKind },
     /// The digits, already rounded, already padded to `minimumIntegerDigits`, and without any sign:
     /// what a pattern puts its affixes around.
     Number {
@@ -1554,7 +1551,9 @@ impl DecimalRenderer {
         // The compact lists are read through the same provider as the decimal formatter below, so
         // that the number it interpolates into `0K` groups the way ours does and the two strings
         // still line up in [`Self::write_compact`].
-        let (formatter, compact_short, compact_long) = if grouping.needs_grouping_of_four_digit_numbers() {
+        let (formatter, compact_short, compact_long) = if grouping
+            .needs_grouping_of_four_digit_numbers()
+        {
             let provider = MinimumGroupingDigitsOne;
             (
                 DecimalFormatter::try_new_unstable(&provider, (&locale).into(), options)?,
@@ -1621,14 +1620,10 @@ impl DecimalRenderer {
         sink: &mut S,
     ) {
         match self.render(slots, value) {
-            Rendered::Special { category, kind } => {
-                self.write_special(slots, category, kind, sink)
+            Rendered::Special { category, kind } => self.write_special(slots, category, kind, sink),
+            Rendered::Number { category, digits, compact } => {
+                self.write_decimal(slots, category, digits, compact, sink)
             }
-            Rendered::Number {
-                category,
-                digits,
-                compact,
-            } => self.write_decimal(slots, category, digits, compact, sink),
         }
     }
 
@@ -1688,10 +1683,7 @@ impl DecimalRenderer {
 
         let compact = match slots.notation {
             Notation::Standard => None,
-            Notation::Compact => Some(Compacting {
-                exponent,
-                display: slots.compact_display,
-            }),
+            Notation::Compact => Some(Compacting { exponent, display: slots.compact_display }),
         };
 
         // 16.5.2 steps 4-7.
@@ -1716,11 +1708,7 @@ impl DecimalRenderer {
             (false, false) => SignCategory::PositiveNonZero,
         };
 
-        Rendered::Number {
-            category,
-            digits,
-            compact,
-        }
+        Rendered::Number { category, digits, compact }
     }
 
     /// The rounded digits of [`Rendered::Number`], written with the locale's separators and grouping
@@ -1871,18 +1859,19 @@ impl DecimalRenderer {
         kind: PartKind,
         sink: &mut S,
     ) {
-        self.signs.wrap(pattern_sign(slots.sign_display, category), sink, |sink| {
-            sink.write_part(
-                kind,
-                if kind == PartKind::Nan {
-                    NAN_STRING
-                } else {
-                    INFINITY_STRING
-                },
-            );
+        self.signs
+            .wrap(pattern_sign(slots.sign_display, category), sink, |sink| {
+                sink.write_part(
+                    kind,
+                    if kind == PartKind::Nan {
+                        NAN_STRING
+                    } else {
+                        INFINITY_STRING
+                    },
+                );
 
-            self.write_percent_affix(slots, sink);
-        });
+                self.write_percent_affix(slots, sink);
+            });
     }
 
     /// The tail of a percent pattern: a space where the locale's pattern has one, then the percent
@@ -1917,14 +1906,10 @@ fn write_formatted<S: NumberSink>(formatter: &DecimalFormatter, value: &Decimal,
 /// the placement comes from the rendering rather than from the pattern text. Every locale built here
 /// puts both affixes in front of the number, and this reads that instead of assuming it.
 fn sign_affixes_of(formatter: &DecimalFormatter) -> SignAffixes {
-    let (minus_prefix, minus_suffix) = affix_pair_of(formatter, Sign::Negative, PartKind::MinusSign);
+    let (minus_prefix, minus_suffix) =
+        affix_pair_of(formatter, Sign::Negative, PartKind::MinusSign);
     let (plus_prefix, plus_suffix) = affix_pair_of(formatter, Sign::Positive, PartKind::PlusSign);
-    SignAffixes {
-        minus_prefix,
-        minus_suffix,
-        plus_prefix,
-        plus_suffix,
-    }
+    SignAffixes { minus_prefix, minus_suffix, plus_prefix, plus_suffix }
 }
 
 /// The two ends of the affix `sign` renders as, which is everything of kind `kind` before and after

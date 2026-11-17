@@ -11,8 +11,8 @@ use crate::{
         error::type_error,
         intrinsic_builder::IntrinsicBuilder,
         intrinsics::{
-            intrinsics::Intrinsic,
             intl::collator_object::{CollatorObject, compare_strings, this_collator},
+            intrinsics::Intrinsic,
             rust_runtime::RuntimeFunction,
         },
         object_value::ObjectValue,
@@ -66,12 +66,18 @@ impl CollatorPrototype {
         // already Strings, [[Usage]], [[Sensitivity]] and [[CaseFirst]] are the names of the enums
         // they hold, and [[IgnorePunctuation]] and [[Numeric]] are Booleans.
         let locale = collator.locale().to_handle(cx);
-        let usage = cx.alloc_static_string(collator.usage().as_str())?.as_value();
-        let sensitivity = cx.alloc_static_string(settings.sensitivity.as_str())?.as_value();
+        let usage = cx
+            .alloc_static_string(collator.usage().as_str())?
+            .as_value();
+        let sensitivity = cx
+            .alloc_static_string(settings.sensitivity.as_str())?
+            .as_value();
         let ignore_punctuation = cx.bool(settings.ignore_punctuation);
         let collation = collator.collation().to_handle(cx);
         let numeric = cx.bool(settings.numeric);
-        let case_first = cx.alloc_static_string(settings.case_first.as_str())?.as_value();
+        let case_first = cx
+            .alloc_static_string(settings.case_first.as_str())?
+            .as_value();
 
         // Step 3: OrdinaryObjectCreate(%Object.prototype%).
         let options = ordinary_object_create(cx)?;

@@ -3,6 +3,10 @@
 //! instance and its options are the object file's, and this file only decides which of them a
 //! program reaches.
 
+use super::intl_object::canonicalize_locale_list_argument;
+use super::locale_negotiation::{Matcher, supported_locales_of};
+use super::number_format_object::NumberFormatObject;
+use super::options::{coerce_options_to_object, get_name_option};
 use crate::runtime::{
     Context, Handle, Realm,
     abstract_operations::{define_property_or_throw, ordinary_has_instance},
@@ -14,11 +18,6 @@ use crate::runtime::{
     property_descriptor::PropertyDescriptor,
 };
 use crate::{intrinsic_methods, runtime_fn};
-
-use super::intl_object::canonicalize_locale_list_argument;
-use super::locale_negotiation::{Matcher, supported_locales_of};
-use super::number_format_object::NumberFormatObject;
-use super::options::{coerce_options_to_object, get_name_option};
 
 /// %Intl.NumberFormat% (https://tc39.es/ecma402/#sec-intl-numberformat-constructor), 16.1.
 pub struct NumberFormatConstructor;
@@ -125,7 +124,11 @@ impl NumberFormatConstructor {
 
         let supported = supported_locales_of(
             &requested_locales,
-            if matcher == "lookup" { Matcher::Lookup } else { Matcher::BestFit },
+            if matcher == "lookup" {
+                Matcher::Lookup
+            } else {
+                Matcher::BestFit
+            },
         );
 
         // 9.2.9 step 5: CreateArrayFromList, in the order the caller asked and with the tags as the

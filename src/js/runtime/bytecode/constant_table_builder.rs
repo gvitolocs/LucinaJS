@@ -362,11 +362,7 @@ impl ConstantTableBuilder {
     }
 
     /// Add an array index property key to the constant table.
-    pub fn add_array_index(
-        &mut self,
-        index: u32,
-        prov: Prov,
-    ) -> EmitResult<ConstantTableIndex> {
+    pub fn add_array_index(&mut self, index: u32, prov: Prov) -> EmitResult<ConstantTableIndex> {
         debug_assert!(index != u32::MAX);
         self.insert_if_missing(ConstantTableEntry::ArrayIndex(index), prov)
     }

@@ -10,6 +10,7 @@ use crate::{
         array_object::{ArrayObject, create_array_from_list},
         bound_function_object::BoundFunctionObject,
         bytecode::function::ClosureObject,
+        embed::HostObject,
         error::{err_cannot_set_property, range_error, type_error},
         eval::expression::eval_instanceof_expression,
         eval_result::EvalResult,
@@ -19,7 +20,6 @@ use crate::{
         object_value::ObjectValue,
         property_descriptor::PropertyDescriptor,
         property_key::PropertyKey,
-        embed::HostObject,
         proxy_object::ProxyObject,
         realm::Realm,
         type_utilities::{

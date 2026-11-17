@@ -99,17 +99,26 @@ fn every_test_gets_its_own_budget() {
     let spent_start = SystemTime::now();
     std::thread::sleep(budget * 2);
 
-    let spent = ContextBuilder::new().mock_unix_time_nanos(MOCK_BASE_NANOS).build().unwrap();
+    let spent = ContextBuilder::new()
+        .mock_unix_time_nanos(MOCK_BASE_NANOS)
+        .build()
+        .unwrap();
     let spent_guard = watchdog.arm(spent, spent_start).unwrap();
     std::thread::sleep(budget / 3);
 
-    assert!(spent_guard.is_timeout(), "a test that started over budget was never interrupted");
+    assert!(
+        spent_guard.is_timeout(),
+        "a test that started over budget was never interrupted"
+    );
     assert!(
         !TimeoutHost::new(spent_guard.fired_flag()).interrupt(spent),
         "the host of a timed out test told the VM to carry on"
     );
 
-    let fresh = ContextBuilder::new().mock_unix_time_nanos(MOCK_BASE_NANOS).build().unwrap();
+    let fresh = ContextBuilder::new()
+        .mock_unix_time_nanos(MOCK_BASE_NANOS)
+        .build()
+        .unwrap();
     let fresh_guard = watchdog.arm(fresh, SystemTime::now()).unwrap();
 
     assert!(!fresh_guard.is_timeout(), "a test that has not used its budget was interrupted");
@@ -138,7 +147,10 @@ fn a_fire_inside_the_budget_is_not_a_timeout() {
     let budget = Duration::from_secs(3600);
     let watchdog = Watchdog::new(budget);
 
-    let cx = ContextBuilder::new().mock_unix_time_nanos(MOCK_BASE_NANOS).build().unwrap();
+    let cx = ContextBuilder::new()
+        .mock_unix_time_nanos(MOCK_BASE_NANOS)
+        .build()
+        .unwrap();
     let guard = watchdog.arm(cx, SystemTime::now()).unwrap();
 
     assert!(
@@ -178,7 +190,10 @@ fn each_run_of_a_two_run_test_gets_the_whole_budget() {
     let test_start = SystemTime::now();
 
     // The first run, taking half its budget and finishing inside it.
-    let first_cx = ContextBuilder::new().mock_unix_time_nanos(MOCK_BASE_NANOS).build().unwrap();
+    let first_cx = ContextBuilder::new()
+        .mock_unix_time_nanos(MOCK_BASE_NANOS)
+        .build()
+        .unwrap();
     let first_start = SystemTime::now();
     let first = watchdog.arm(first_cx, first_start).unwrap();
     std::thread::sleep(budget / 2);
@@ -192,7 +207,10 @@ fn each_run_of_a_two_run_test_gets_the_whole_budget() {
 
     // The way the runner used to arm: against the start of the whole test. With half the budget
     // already spent by the first run, the second is past its deadline before it does anything.
-    let starved_cx = ContextBuilder::new().mock_unix_time_nanos(MOCK_BASE_NANOS).build().unwrap();
+    let starved_cx = ContextBuilder::new()
+        .mock_unix_time_nanos(MOCK_BASE_NANOS)
+        .build()
+        .unwrap();
     let starved = watchdog.arm(starved_cx, test_start).unwrap();
     std::thread::sleep(budget * 3 / 4);
 
@@ -210,7 +228,10 @@ fn each_run_of_a_two_run_test_gets_the_whole_budget() {
         "the test had not even spent one budget yet, so nothing here was proven"
     );
 
-    let second_cx = ContextBuilder::new().mock_unix_time_nanos(MOCK_BASE_NANOS).build().unwrap();
+    let second_cx = ContextBuilder::new()
+        .mock_unix_time_nanos(MOCK_BASE_NANOS)
+        .build()
+        .unwrap();
     let second_start = SystemTime::now();
     let second = watchdog.arm(second_cx, second_start).unwrap();
     std::thread::sleep(budget / 4);
@@ -233,7 +254,10 @@ fn each_run_of_a_two_run_test_gets_the_whole_budget() {
 fn embed_host_timeout_fires_on_the_embed_path() {
     let timeout = Duration::from_secs(2);
 
-    let cx = ContextBuilder::new().mock_unix_time_nanos(MOCK_BASE_NANOS).build().unwrap();
+    let cx = ContextBuilder::new()
+        .mock_unix_time_nanos(MOCK_BASE_NANOS)
+        .build()
+        .unwrap();
 
     let watchdog = Watchdog::new(timeout);
     let guard = watchdog.arm(cx, SystemTime::now()).unwrap();
@@ -300,7 +324,8 @@ fn test262_await_import_evaluation_completes() {
     let mut ignored = HashMap::new();
     for suite in &manifest.suites {
         let path = manifest.manifest_dir.as_path().join(&suite.ignored_file);
-        ignored.insert(suite.suite, IgnoredIndex::load_from_file(&path, true, false, false).unwrap());
+        ignored
+            .insert(suite.suite, IgnoredIndex::load_from_file(&path, true, false, false).unwrap());
     }
 
     let mut runner = TestRunner::new(
@@ -315,12 +340,15 @@ fn test262_await_import_evaluation_completes() {
     );
     let results = runner.run(false);
 
-    assert_eq!(outcome(&results, PATH), Some(TestResultCompletion::Success), "{PATH} did not pass");
+    assert_eq!(
+        outcome(&results, PATH),
+        Some(TestResultCompletion::Success),
+        "{PATH} did not pass"
+    );
 }
 
 /// The fixture suite, ready for a run.
-fn fixture_runner_inputs(
-) -> (TestManifest, TestIndex, HashMap<Suite, IgnoredIndex>, SuiteFilter) {
+fn fixture_runner_inputs() -> (TestManifest, TestIndex, HashMap<Suite, IgnoredIndex>, SuiteFilter) {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test_fixtures");
     let manifest = TestManifest::load_from_file(&dir.join("manifest.json")).unwrap();
 
@@ -345,7 +373,10 @@ fn run_fixtures(timeout: Duration) -> TestResults {
 }
 
 fn outcome(results: &TestResults, path: &str) -> Option<TestResultCompletion> {
-    results.outcomes().find(|result| result.path == path).map(|result| result.result.clone())
+    results
+        .outcomes()
+        .find(|result| result.path == path)
+        .map(|result| result.result.clone())
 }
 
 fn time_of(results: &TestResults, path: &str) -> Duration {

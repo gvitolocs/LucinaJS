@@ -33,8 +33,8 @@ use icu_provider::prelude::{
 };
 
 use super::number_format_core::{
-    CurrencyCode, CurrencyDisplay, CurrencySign, DecimalRenderer, INFINITY_STRING, IntlMathValue,
-    Compacting, NAN_STRING, NumberFormatSlots, NumberPart, NumberSink, PartKind, Rendered,
+    Compacting, CurrencyCode, CurrencyDisplay, CurrencySign, DecimalRenderer, INFINITY_STRING,
+    IntlMathValue, NAN_STRING, NumberFormatSlots, NumberPart, NumberSink, PartKind, Rendered,
     SignAffixes, SignCategory, pattern_sign,
 };
 
@@ -110,17 +110,18 @@ impl CurrencyRenderer {
         let code = settings.code.as_str().to_string();
 
         let essentials: DataPayload<CurrencyEssentialsV1> =
-            DataProvider::<CurrencyEssentialsV1>::load(&IntlDataProvider, request(&data_locale, None))?
-                .payload;
+            DataProvider::<CurrencyEssentialsV1>::load(
+                &IntlDataProvider,
+                request(&data_locale, None),
+            )?
+            .payload;
 
         let text = match settings.display {
             // The code is its own currency string, and a code is three letters, so it both starts and
             // ends with one.
-            CurrencyDisplay::Code => CurrencyText::Fixed {
-                text: code,
-                starts_with_letter: true,
-                ends_with_letter: true,
-            },
+            CurrencyDisplay::Code => {
+                CurrencyText::Fixed { text: code, starts_with_letter: true, ends_with_letter: true }
+            }
             CurrencyDisplay::Symbol | CurrencyDisplay::NarrowSymbol => {
                 // The identifier the symbols are keyed by, which is `CurrencySymbolsV1`'s own
                 // `make_attributes`: the width marker `s` for the full symbol and `n` for the narrow
@@ -172,12 +173,7 @@ impl CurrencyRenderer {
             }
         };
 
-        Ok(Self {
-            decimals,
-            settings,
-            essentials,
-            text,
-        })
+        Ok(Self { decimals, settings, essentials, text })
     }
 
     /// FormatNumeric (https://tc39.es/ecma402/#sec-formatnumeric), 16.5.5.
@@ -210,11 +206,9 @@ impl CurrencyRenderer {
             Rendered::Special { category, kind } => {
                 self.write(slots, category, Body::Special(kind), sink)
             }
-            Rendered::Number {
-                category,
-                digits,
-                compact,
-            } => self.write(slots, category, Body::Number(&digits, compact), sink),
+            Rendered::Number { category, digits, compact } => {
+                self.write(slots, category, Body::Number(&digits, compact), sink)
+            }
         }
     }
 
@@ -239,51 +233,45 @@ impl CurrencyRenderer {
         let accounting = self.settings.sign == CurrencySign::Accounting;
 
         match &self.text {
-            CurrencyText::Fixed {
-                text,
-                starts_with_letter,
-                ends_with_letter,
-            } => {
+            CurrencyText::Fixed { text, starts_with_letter, ends_with_letter } => {
                 let essentials = self.essentials.get();
                 let (pattern, leftover) = if accounting {
                     if sign == Sign::Negative {
-                        match essentials.get_negative_accounting(*starts_with_letter, *ends_with_letter)
+                        match essentials
+                            .get_negative_accounting(*starts_with_letter, *ends_with_letter)
                         {
                             Some(pattern) => (pattern, Sign::None),
                             None => (
-                                essentials
-                                    .get_positive_accounting(*starts_with_letter, *ends_with_letter),
+                                essentials.get_positive_accounting(
+                                    *starts_with_letter,
+                                    *ends_with_letter,
+                                ),
                                 sign,
                             ),
                         }
                     } else {
                         (
-                            essentials.get_positive_accounting(*starts_with_letter, *ends_with_letter),
+                            essentials
+                                .get_positive_accounting(*starts_with_letter, *ends_with_letter),
                             sign,
                         )
                     }
                 } else if sign == Sign::Negative {
                     match essentials.get_negative(*starts_with_letter, *ends_with_letter) {
                         Some(pattern) => (pattern, Sign::None),
-                        None => (essentials.get_positive(*starts_with_letter, *ends_with_letter), sign),
+                        None => {
+                            (essentials.get_positive(*starts_with_letter, *ends_with_letter), sign)
+                        }
                     }
                 } else {
-                    (
-                        essentials.get_positive(*starts_with_letter, *ends_with_letter),
-                        sign,
-                    )
+                    (essentials.get_positive(*starts_with_letter, *ends_with_letter), sign)
                 };
 
                 signs.wrap(leftover, sink, |sink| {
                     self.walk(pattern, text, signs, body, sink);
                 });
             }
-            CurrencyText::Name {
-                extended,
-                patterns,
-                plural_rules,
-                code,
-            } => {
+            CurrencyText::Name { extended, patterns, plural_rules, code } => {
                 let patterns = patterns.get();
                 let (pattern, text) = match (extended, body) {
                     // The plural category is that of the rendered number, which is why this arm wants
@@ -392,12 +380,11 @@ pub(crate) fn marker_attributes(code: &str) -> Result<&DataMarkerAttributes, Dat
 /// count and 16.1.1 asks for that count alone. A Swiss franc amount is therefore rounded to two
 /// digits here, which is also what the implementations this build is compared against do.
 pub fn currency_digits(code: CurrencyCode) -> Result<u8, DataError> {
-    let fractions: DataPayload<CurrencyFractionsV1> =
-        DataProvider::<CurrencyFractionsV1>::load(
-            &IntlDataProvider,
-            request(&DataLocale::default(), None),
-        )?
-        .payload;
+    let fractions: DataPayload<CurrencyFractionsV1> = DataProvider::<CurrencyFractionsV1>::load(
+        &IntlDataProvider,
+        request(&DataLocale::default(), None),
+    )?
+    .payload;
 
     Ok(fractions.get().resolve(currency_type(code)?).digits)
 }
@@ -447,10 +434,10 @@ fn request<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::number_format_core::{
         SignDisplay, Style, UseGrouping, math_value_from_string,
     };
+    use super::*;
 
     /// The renderer of one locale and currency, with the digits 16.1.1 step 13 gives it.
     fn renderer(
@@ -460,16 +447,8 @@ mod tests {
         sign: CurrencySign,
     ) -> CurrencyRenderer {
         let decimals = Rc::new(DecimalRenderer::try_new(locale, UseGrouping::Auto).unwrap());
-        CurrencyRenderer::try_new(
-            locale,
-            decimals,
-            CurrencySettings {
-                code,
-                display,
-                sign,
-            },
-        )
-        .unwrap()
+        CurrencyRenderer::try_new(locale, decimals, CurrencySettings { code, display, sign })
+            .unwrap()
     }
 
     /// The slots a `NumberFormat` of this currency ends up with, plus the value to format.
@@ -499,10 +478,7 @@ mod tests {
         CurrencyCode::parse(text).unwrap()
     }
 
-    fn parts(
-        renderer: &CurrencyRenderer,
-        text: &str,
-    ) -> Vec<(PartKind, String)> {
+    fn parts(renderer: &CurrencyRenderer, text: &str) -> Vec<(PartKind, String)> {
         let slots = currency_slots(renderer.settings.code);
         renderer
             .format_to_parts(&slots, &math_value_from_string(text))
@@ -523,12 +499,7 @@ mod tests {
 
     #[test]
     fn an_accounting_negative_is_in_parentheses_and_has_no_minus() {
-        let usd = renderer(
-            "en",
-            code("USD"),
-            CurrencyDisplay::Symbol,
-            CurrencySign::Accounting,
-        );
+        let usd = renderer("en", code("USD"), CurrencyDisplay::Symbol, CurrencySign::Accounting);
         assert_eq!(formatted(&usd, "-5", no_change), "($5.00)");
         assert_eq!(formatted(&usd, "5", no_change), "$5.00");
         // 16.5.3 keeps the parentheses literals as literals: they are not the locale's minus.
@@ -600,22 +571,14 @@ mod tests {
 
     #[test]
     fn the_narrow_symbol_and_the_symbol_differ_where_the_data_says_they_do() {
-        let narrow = renderer(
-            "en",
-            code("USD"),
-            CurrencyDisplay::NarrowSymbol,
-            CurrencySign::Standard,
-        );
+        let narrow =
+            renderer("en", code("USD"), CurrencyDisplay::NarrowSymbol, CurrencySign::Standard);
         assert_eq!(formatted(&narrow, "1234.5", no_change), "$1,234.50");
         // In Danish the two differ: the symbol names the country, the narrow form does not.
         let danish = renderer("da", code("USD"), CurrencyDisplay::Symbol, CurrencySign::Standard);
         assert_eq!(formatted(&danish, "1234.5", no_change), "1.234,50\u{a0}US$");
-        let danish_narrow = renderer(
-            "da",
-            code("USD"),
-            CurrencyDisplay::NarrowSymbol,
-            CurrencySign::Standard,
-        );
+        let danish_narrow =
+            renderer("da", code("USD"), CurrencyDisplay::NarrowSymbol, CurrencySign::Standard);
         assert_eq!(formatted(&danish_narrow, "1234.5", no_change), "1.234,50\u{a0}$");
     }
 
@@ -666,7 +629,8 @@ mod tests {
         // place of the string that is missing.
         let unknown = renderer("en", code("XYZ"), CurrencyDisplay::Symbol, CurrencySign::Standard);
         assert_eq!(formatted(&unknown, "1234.5", no_change), "XYZ\u{a0}1,234.50");
-        let unknown_name = renderer("en", code("XYZ"), CurrencyDisplay::Name, CurrencySign::Standard);
+        let unknown_name =
+            renderer("en", code("XYZ"), CurrencyDisplay::Name, CurrencySign::Standard);
         assert_eq!(formatted(&unknown_name, "1234.5", no_change), "1,234.50 XYZ");
         // The digit table knows no more than the symbol table does, so the default is its two.
         assert_eq!(currency_digits(code("XYZ")).unwrap(), 2);

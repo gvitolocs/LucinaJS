@@ -278,11 +278,11 @@ pub(crate) fn canonical_u_value(key: &str, value: &str) -> String {
 /// - `kf` and `kn`, whose canonical form CLDR writes as the bare key, stay with the route above.
 fn keyword_value(key: &str, value: &str) -> Option<String> {
     use icu_locale::extensions::unicode::Value;
+    // The canonical spelling is a method of the trait, so it has to be in scope to be called.
+    use icu_locale::preferences::PreferenceKey;
     use icu_locale::preferences::extensions::unicode::keywords::{
         CalendarAlgorithm, CollationType, FirstDay, HourCycle,
     };
-    // The canonical spelling is a method of the trait, so it has to be in scope to be called.
-    use icu_locale::preferences::PreferenceKey;
 
     let value = Value::try_from_str(value).ok()?;
 
@@ -665,15 +665,12 @@ pub fn resolve_locale_with_extension_keys(
     // Steps 1-3, then step 4 for the fallback: an unsupported request still resolves, to the
     // default locale, and carries no extension of its own. The collator reports the available key it
     // matched (`found_locale`), not the request, so its `requested_base` is ignored.
-    let LocaleMatch {
-        locale: found_locale,
-        requested_base: _,
-        extension,
-    } = lookup_locale(available_locales, requested_locales, matcher).unwrap_or(LocaleMatch {
-        locale: default_locale().to_owned(),
-        requested_base: default_locale().to_owned(),
-        extension: String::new(),
-    });
+    let LocaleMatch { locale: found_locale, requested_base: _, extension } =
+        lookup_locale(available_locales, requested_locales, matcher).unwrap_or(LocaleMatch {
+            locale: default_locale().to_owned(),
+            requested_base: default_locale().to_owned(),
+            extension: String::new(),
+        });
 
     // Step 5, kept apart from step 14's `[[Locale]]` because the data of a service is looked up by
     // the available locale alone.
@@ -769,11 +766,7 @@ pub fn resolve_locale_with_extension_keys(
             .expect("the resolved locale is a well-formed language tag")
     };
 
-    ServiceLocale {
-        locale,
-        data_locale,
-        values,
-    }
+    ServiceLocale { locale, data_locale, values }
 }
 
 /// InsertUnicodeExtensionAndCanonicalize
@@ -1015,8 +1008,7 @@ pub(crate) fn subdivision_value(value: &str) -> bool {
     // The production is the two `unicode_region_subtag` branches, each immediately followed by the
     // 1-4 character suffix. Trying both is what makes the choice of the grammar unambiguous: the
     // digits branch cannot start an alphabetic one, so at most one of them ever matches.
-    let alphabetic_region =
-        bytes.len() >= 3 && bytes[..2].iter().all(u8::is_ascii_alphabetic);
+    let alphabetic_region = bytes.len() >= 3 && bytes[..2].iter().all(u8::is_ascii_alphabetic);
     let numeric_region = bytes.len() >= 4 && bytes[..3].iter().all(u8::is_ascii_digit);
 
     [2, 3]
@@ -1060,10 +1052,7 @@ pub(crate) fn locale_base_name(tag: &str) -> &str {
 /// GetLocaleLanguage (https://tc39.es/ecma402/#sec-getlocalelanguage), 15.5.2.
 pub(crate) fn locale_language(tag: &str) -> &str {
     // Steps 1-4: the first subtag of the base name, which 15.5.2 step 3 asserts is a language.
-    locale_base_name(tag)
-        .split('-')
-        .next()
-        .unwrap_or_default()
+    locale_base_name(tag).split('-').next().unwrap_or_default()
 }
 
 /// GetLocaleScript (https://tc39.es/ecma402/#sec-getlocalescript), 15.5.3.
@@ -1201,9 +1190,7 @@ pub(crate) fn region_preference(tag: &str) -> RegionPreference {
                 let maximal = add_likely_subtags(tag).unwrap_or_else(|| tag.to_owned());
                 let maximal = canonicalize_locale_tag(&maximal).unwrap_or(maximal);
 
-                locale_region(&maximal)
-                    .unwrap_or("001")
-                    .to_owned()
+                locale_region(&maximal).unwrap_or("001").to_owned()
             }
         },
     };
@@ -1337,7 +1324,8 @@ static UND_ROW: LazyLock<(Language, Script, Region)> = LazyLock::new(|| {
 fn reserved_language(base: &str) -> Option<&str> {
     let (language, _) = base.split_once('-').unwrap_or((base, ""));
 
-    if (5..=8).contains(&language.len()) && language.bytes().all(|byte| byte.is_ascii_alphabetic()) {
+    if (5..=8).contains(&language.len()) && language.bytes().all(|byte| byte.is_ascii_alphabetic())
+    {
         Some(language)
     } else {
         None
@@ -1504,12 +1492,7 @@ pub(crate) fn make_locale_record(
             .map(|(key, value)| (key.clone(), (!value.is_empty()).then(|| value.clone())))
             .collect::<Vec<_>>();
 
-        insert_unicode_extension_and_canonicalize(
-            &CANONICALIZER,
-            &base,
-            &attributes,
-            &keywords,
-        )?
+        insert_unicode_extension_and_canonicalize(&CANONICALIZER, &base, &attributes, &keywords)?
     };
 
     Ok((locale, values))
@@ -1558,14 +1541,8 @@ mod tests {
         // The casing of the sequence is regularized and its keys sorted, and a private use sequence
         // stays where BCP 47 puts it: last.
         assert_eq!(canonicalize_locale_tag("EN-U-KN-TRUE").unwrap(), "en-u-kn");
-        assert_eq!(
-            canonicalize_locale_tag("en-u-kf-lower-kn-TRUE").unwrap(),
-            "en-u-kf-lower-kn"
-        );
-        assert_eq!(
-            canonicalize_locale_tag("en-u-kn-true-x-icu").unwrap(),
-            "en-u-kn-x-icu"
-        );
+        assert_eq!(canonicalize_locale_tag("en-u-kf-lower-kn-TRUE").unwrap(), "en-u-kf-lower-kn");
+        assert_eq!(canonicalize_locale_tag("en-u-kn-true-x-icu").unwrap(), "en-u-kn-x-icu");
 
         // A key `Intl` itself does not read gets no CanonicalizeUValue - the data of its aliases is
         // not baked - but the rule above is about the syntax of any sequence, so it covers that key
@@ -1803,12 +1780,8 @@ mod tests {
 
         // And the blank does not invent a keyword the request never asked for.
         assert_eq!(
-            resolve_locale_with_keys(
-                &canonical(&["en"]),
-                Matcher::Lookup,
-                &[asked(None, true)],
-            )
-            .locale,
+            resolve_locale_with_keys(&canonical(&["en"]), Matcher::Lookup, &[asked(None, true)],)
+                .locale,
             "en"
         );
     }
@@ -1948,10 +1921,7 @@ mod tests {
 
         let resolved = resolve(&["en-u-kf-upper-kn-true"], &keys);
         assert_eq!(resolved.locale, "en-u-kf-upper-kn");
-        assert_eq!(
-            resolved.values,
-            [None, Some("true".to_owned()), Some("upper".to_owned())]
-        );
+        assert_eq!(resolved.values, [None, Some("true".to_owned()), Some("upper".to_owned())]);
     }
 
     /// The base name and the four subtag getters, over the tags test262's
@@ -2069,15 +2039,24 @@ mod tests {
     fn a_unicode_extension_value_is_the_first_one_written_for_the_key() {
         // 15.5.6, over a canonicalized tag.
         assert_eq!(unicode_extension_value("en-u-ca-buddhist", "ca").as_deref(), Some("buddhist"));
-        assert_eq!(unicode_extension_value("en-u-nu-latn-ca-buddhist", "ca").as_deref(), Some("buddhist"));
+        assert_eq!(
+            unicode_extension_value("en-u-nu-latn-ca-buddhist", "ca").as_deref(),
+            Some("buddhist")
+        );
         assert_eq!(unicode_extension_value("en-u-ca", "ca").as_deref(), Some(""));
         assert_eq!(unicode_extension_value("en-u-nu-latn", "ca"), None);
         assert_eq!(unicode_extension_value("en", "ca"), None);
         assert_eq!(unicode_extension_value("en-x-u-ca-buddhist", "ca"), None);
-        assert_eq!(unicode_extension_value("en-u-ca-ethiopic-amite", "ca").as_deref(), Some("ethiopic-amite"));
+        assert_eq!(
+            unicode_extension_value("en-u-ca-ethiopic-amite", "ca").as_deref(),
+            Some("ethiopic-amite")
+        );
 
         // 9.2.5 keeps the first value of a repeated key.
-        assert_eq!(unicode_extension_value("en-u-ca-buddhist-ca-gregory", "ca").as_deref(), Some("buddhist"));
+        assert_eq!(
+            unicode_extension_value("en-u-ca-buddhist-ca-gregory", "ca").as_deref(),
+            Some("buddhist")
+        );
     }
 
     #[test]
@@ -2188,14 +2167,8 @@ mod tests {
 
         // Minimization removes the script and region that a variant implies, but not the variant.
         assert_eq!(remove_likely_subtags("en-Shaw-GB").as_deref(), Some("en-Shaw"));
-        assert_eq!(
-            remove_likely_subtags("en-Latn-US-u-nu-arab").as_deref(),
-            Some("en-u-nu-arab")
-        );
-        assert_eq!(
-            remove_likely_subtags("en-Latn-US-a-bar").as_deref(),
-            Some("en-a-bar")
-        );
+        assert_eq!(remove_likely_subtags("en-Latn-US-u-nu-arab").as_deref(), Some("en-u-nu-arab"));
+        assert_eq!(remove_likely_subtags("en-Latn-US-a-bar").as_deref(), Some("en-a-bar"));
 
         // A tag the tables know nothing about is left as it is, which is what 15.3.9 step 3's
         // "if an error is signaled" branch then answers with.
@@ -2226,8 +2199,18 @@ mod tests {
         assert_eq!(region_preference("qq-QQ").region, "QQ");
 
         // Step 3: the override is read from the `rg` key, canonicalized through its own region.
-        assert_eq!(region_preference("en-u-rg-inzzzz").region_override.as_deref(), Some("IN"));
-        assert_eq!(region_preference("en-US-u-rg-de01").region_override.as_deref(), Some("DE"));
+        assert_eq!(
+            region_preference("en-u-rg-inzzzz")
+                .region_override
+                .as_deref(),
+            Some("IN")
+        );
+        assert_eq!(
+            region_preference("en-US-u-rg-de01")
+                .region_override
+                .as_deref(),
+            Some("DE")
+        );
         assert_eq!(region_preference("en-US").region_override, None);
 
         // A value that is not a subdivision id is no override at all: the suffix of the production

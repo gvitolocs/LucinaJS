@@ -6,6 +6,8 @@
 //! [`super::number_format_object`]; this file is only the methods a program calls and the function
 //! `format` hands back.
 
+use super::number_format_core::{Notation, NumberPart};
+use super::number_format_object::NumberFormatObject;
 use crate::{
     intrinsic_methods,
     runtime::{
@@ -23,9 +25,6 @@ use crate::{
     },
     runtime_fn,
 };
-
-use super::number_format_core::{Notation, NumberPart};
-use super::number_format_object::NumberFormatObject;
 
 /// %Intl.NumberFormat.prototype% (https://tc39.es/ecma402/#sec-properties-of-the-intl-numberformat-prototype-object),
 /// 16.3.
@@ -83,17 +82,52 @@ impl NumberFormatPrototype {
         // report even though step 6 and step 7 read and checked the two options for it.
         if let Some(currency) = resolved.slots.currency {
             report_str(cx, options, cx.names.currency(), currency.as_str())?;
-            report_str(cx, options, cx.names.currency_display(), resolved.slots.currency_display.as_str())?;
-            report_str(cx, options, cx.names.currency_sign(), resolved.slots.currency_sign.as_str())?;
+            report_str(
+                cx,
+                options,
+                cx.names.currency_display(),
+                resolved.slots.currency_display.as_str(),
+            )?;
+            report_str(
+                cx,
+                options,
+                cx.names.currency_sign(),
+                resolved.slots.currency_sign.as_str(),
+            )?;
         }
-        report_number(cx, options, cx.names.minimum_integer_digits(), resolved.slots.minimum_integer_digits)?;
+        report_number(
+            cx,
+            options,
+            cx.names.minimum_integer_digits(),
+            resolved.slots.minimum_integer_digits,
+        )?;
         if resolved.slots.reports_fraction_digits {
-            report_number(cx, options, cx.names.minimum_fraction_digits(), resolved.slots.minimum_fraction_digits)?;
-            report_number(cx, options, cx.names.maximum_fraction_digits(), resolved.slots.maximum_fraction_digits)?;
+            report_number(
+                cx,
+                options,
+                cx.names.minimum_fraction_digits(),
+                resolved.slots.minimum_fraction_digits,
+            )?;
+            report_number(
+                cx,
+                options,
+                cx.names.maximum_fraction_digits(),
+                resolved.slots.maximum_fraction_digits,
+            )?;
         }
         if resolved.slots.reports_significant_digits {
-            report_number(cx, options, cx.names.minimum_significant_digits(), resolved.slots.minimum_significant_digits)?;
-            report_number(cx, options, cx.names.maximum_significant_digits(), resolved.slots.maximum_significant_digits)?;
+            report_number(
+                cx,
+                options,
+                cx.names.minimum_significant_digits(),
+                resolved.slots.minimum_significant_digits,
+            )?;
+            report_number(
+                cx,
+                options,
+                cx.names.maximum_significant_digits(),
+                resolved.slots.maximum_significant_digits,
+            )?;
         }
         // 16.1.1 step 24 turned the Boolean `true` into "always" and left `false` the Boolean, which
         // is what [`super::number_format_core::UseGrouping::resolved_name`] reports.
@@ -117,10 +151,25 @@ impl NumberFormatPrototype {
         }
 
         report_str(cx, options, cx.names.sign_display(), resolved.slots.sign_display.as_str())?;
-        report_number(cx, options, cx.names.rounding_increment(), resolved.slots.rounding_increment.as_u32())?;
+        report_number(
+            cx,
+            options,
+            cx.names.rounding_increment(),
+            resolved.slots.rounding_increment.as_u32(),
+        )?;
         report_str(cx, options, cx.names.rounding_mode(), resolved.slots.rounding_mode.as_str())?;
-        report_str(cx, options, cx.names.rounding_priority(), resolved.slots.rounding_priority.as_str())?;
-        report_str(cx, options, cx.names.trailing_zero_display(), resolved.slots.trailing_zero_display.as_str())?;
+        report_str(
+            cx,
+            options,
+            cx.names.rounding_priority(),
+            resolved.slots.rounding_priority.as_str(),
+        )?;
+        report_str(
+            cx,
+            options,
+            cx.names.trailing_zero_display(),
+            resolved.slots.trailing_zero_display.as_str(),
+        )?;
 
         // Step 6.
         Ok(options.as_value())

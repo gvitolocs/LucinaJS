@@ -17,11 +17,11 @@ pub mod secret;
 pub mod template;
 pub mod wire;
 
-use rustc_hash::FxHashMap as HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
 
 pub use key::UncacheableReason;
+use rustc_hash::FxHashMap as HashMap;
 use template::Template;
 
 /// Statistics of the function cache. All counters are cumulative for the context's lifetime.
@@ -102,7 +102,9 @@ impl FunctionCache {
     pub fn set_dir(&mut self, dir: Option<PathBuf>) {
         self.disk = None;
         let Some(dir) = dir else { return };
-        let Some(secret) = secret::load_or_create(&dir) else { return };
+        let Some(secret) = secret::load_or_create(&dir) else {
+            return;
+        };
         self.secret = secret;
         self.mem.clear();
         self.mem_bytes = 0;
@@ -127,7 +129,11 @@ impl FunctionCache {
         if partition.is_empty() {
             return 0;
         }
-        if let Some(index) = self.partitions.iter().position(|(bytes, _)| **bytes == *partition) {
+        if let Some(index) = self
+            .partitions
+            .iter()
+            .position(|(bytes, _)| **bytes == *partition)
+        {
             return index as u32 + 1;
         }
         let digest = digest_partition(&self.secret, partition);
@@ -164,7 +170,8 @@ impl FunctionCache {
             if let Some(template) = disk.load(key, partition) {
                 let template = Arc::new(template);
                 self.mem_bytes += template.size;
-                self.mem.insert(key, Entry { key, partition, template: Arc::clone(&template) });
+                self.mem
+                    .insert(key, Entry { key, partition, template: Arc::clone(&template) });
                 return Some(template);
             }
         }
@@ -213,8 +220,9 @@ impl Default for FunctionCache {
 
 /// The digest of a partition under a secret: SipHash-1-3 with 128 bits, keyed with the secret.
 fn digest_partition(secret: &secret::KeySecret, partition: &[u8]) -> u128 {
-    use siphasher::sip128::{Hasher128, SipHasher13};
     use std::hash::Hasher;
+
+    use siphasher::sip128::{Hasher128, SipHasher13};
     let mut hasher = SipHasher13::new_with_key(secret);
     hasher.write(b"fncache-partition");
     hasher.write_u64(partition.len() as u64);

@@ -17,9 +17,7 @@ use crate::{
     runtime::{
         Context, ContextBuilder, EvalResult, Handle, HeapPtr, PropertyKey, Realm, Value,
         abstract_operations::get,
-        embed::{
-            self, EngineCellHooks, Host, HostFlags, HostObjectRef, RootVisitor, api,
-        },
+        embed::{self, EngineCellHooks, Host, HostFlags, HostObjectRef, RootVisitor, api},
         object_value::ObjectValue,
         string_value::StringValue,
         type_utilities::to_string,
@@ -44,11 +42,15 @@ struct CellHost(Rc<Recorder>);
 
 impl Host for CellHost {
     fn trace_host_object(&self, _: Context, _: HostObjectRef, _: &mut dyn RootVisitor) {
-        self.0.host_trace_calls.set(self.0.host_trace_calls.get() + 1);
+        self.0
+            .host_trace_calls
+            .set(self.0.host_trace_calls.get() + 1);
     }
 
     fn finalize_host_object(&self, _: Context, _: HostObjectRef) {
-        self.0.host_finalize_calls.set(self.0.host_finalize_calls.get() + 1);
+        self.0
+            .host_finalize_calls
+            .set(self.0.host_finalize_calls.get() + 1);
     }
 
     fn can_compile_strings(
@@ -164,14 +166,24 @@ fn finalized_count(address: usize) -> usize {
 }
 
 fn hold(cell: HeapPtr<ObjectValue>, value: Value) {
-    HELD.with(|held| held.borrow_mut().entry(cell.as_ptr() as usize).or_default().push(value.as_raw_bits()));
+    HELD.with(|held| {
+        held.borrow_mut()
+            .entry(cell.as_ptr() as usize)
+            .or_default()
+            .push(value.as_raw_bits())
+    });
 }
 
 fn held(cell: HeapPtr<ObjectValue>) -> Vec<Value> {
     HELD.with(|held| {
         held.borrow()
             .get(&(cell.as_ptr() as usize))
-            .map(|values| values.iter().map(|&bits| Value::from_raw_bits(bits)).collect())
+            .map(|values| {
+                values
+                    .iter()
+                    .map(|&bits| Value::from_raw_bits(bits))
+                    .collect()
+            })
             .unwrap_or_default()
     })
 }
@@ -393,7 +405,10 @@ fn a_call_root_on_the_cell_keeps_its_realm() {
         embed::gc(cx);
     }
     let realm = embed::realm_of_object(cx, cell);
-    assert!(realm.wasm_store().unwrap().ptr_eq(&cell), "the realm died or moved without its edge");
+    assert!(
+        realm.wasm_store().unwrap().ptr_eq(&cell),
+        "the realm died or moved without its edge"
+    );
     assert_eq!(finalized_count(cell.as_ptr() as usize), 0);
 
     embed::pop_cell_call_root(cx, depth, cell);
@@ -431,7 +446,9 @@ fn teardown_finalizes_live_cells_once() {
 /// what their hooks trace check clean before and after every collection.
 #[test]
 fn cells_check_clean_under_gc_verify() {
-    let options = OptionsBuilder::new().gc_stress_window(Some(32 << 10)).gc_verify(true);
+    let options = OptionsBuilder::new()
+        .gc_stress_window(Some(32 << 10))
+        .gc_verify(true);
     let (cx, _recorder) = new_context_with_options(options);
     {
         handle_scope_guard!(cx);
@@ -474,7 +491,12 @@ const CHILD_ENV: &str = "BS_CELL_TESTS_CHILD";
 fn run_child(test_name: &str, mode: &str) -> std::process::ExitStatus {
     let exe = std::env::current_exe().unwrap();
     std::process::Command::new(exe)
-        .args(["--exact", &format!("runtime::embed::cell_tests::{test_name}"), "--nocapture", "--test-threads=1"])
+        .args([
+            "--exact",
+            &format!("runtime::embed::cell_tests::{test_name}"),
+            "--nocapture",
+            "--test-threads=1",
+        ])
         .env(CHILD_ENV, mode)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -547,11 +569,16 @@ fn child_runs_and_exits_cleanly_without_a_misuse() {
 // --- External buffers freed by a cell (ExternalOwner::Free) ---
 
 /// The memory of a `Free` buffer, and a count of free calls.
-fn new_free_buffer(cx: Context, len: usize, frees: &Rc<Cell<usize>>) -> Handle<api::ArrayBufferObject> {
+fn new_free_buffer(
+    cx: Context,
+    len: usize,
+    frees: &Rc<Cell<usize>>,
+) -> Handle<api::ArrayBufferObject> {
     // Words, so the memory is 8-aligned as `array_buffer_new_external` requires
     assert_eq!(len % 8, 0);
     let words = len / 8;
-    let memory: &'static mut [u64] = Box::leak(vec![0x5a5a_5a5a_5a5a_5a5au64; words].into_boxed_slice());
+    let memory: &'static mut [u64] =
+        Box::leak(vec![0x5a5a_5a5a_5a5a_5a5au64; words].into_boxed_slice());
     let words_ptr = memory.as_mut_ptr();
     let frees = frees.clone();
     let free = Box::new(move || {
@@ -563,7 +590,13 @@ fn new_free_buffer(cx: Context, len: usize, frees: &Rc<Cell<usize>>) -> Handle<a
     // SAFETY: the leaked slice is valid and 8-aligned for `len` bytes until the closure frees it,
     // and nothing else references it.
     unsafe {
-        api::array_buffer_new_external(cx, cx.initial_realm(), words_ptr.cast(), len, api::ExternalOwner::Free(free))
+        api::array_buffer_new_external(
+            cx,
+            cx.initial_realm(),
+            words_ptr.cast(),
+            len,
+            api::ExternalOwner::Free(free),
+        )
     }
     .unwrap()
 }
@@ -628,7 +661,8 @@ fn transfer_of_a_free_buffer_copies_and_frees_the_original_once() {
         let buffer = new_free_buffer(cx, 8, &frees);
         let global = realm.global_object().as_object();
         let name = key(cx, "ext");
-        crate::runtime::abstract_operations::set(cx, global, name, buffer.as_value(), true).unwrap();
+        crate::runtime::abstract_operations::set(cx, global, name, buffer.as_value(), true)
+            .unwrap();
 
         let result = eval(
             cx,
@@ -636,7 +670,8 @@ fn transfer_of_a_free_buffer_copies_and_frees_the_original_once() {
             "var t = ext.transfer(12); var v = new Uint8Array(t); \
              [ext.detached, ext.byteLength, t.byteLength, v[0], v[7], v[8], v[11], t.resizable].join()",
         );
-        let result = embed::with_realm(cx, realm, |cx| to_string(cx, result).unwrap().format().unwrap());
+        let result =
+            embed::with_realm(cx, realm, |cx| to_string(cx, result).unwrap().format().unwrap());
         assert_eq!(result, "true,0,12,90,90,0,0,false");
         embed::gc(cx);
         assert_eq!(frees.get(), 1);
@@ -652,13 +687,28 @@ fn null_or_misaligned_external_data_is_only_allowed_when_empty() {
         handle_scope_guard!(cx);
         let realm = cx.initial_realm();
         // SAFETY: a zero-length buffer never reads its data pointer.
-        let empty = unsafe { api::array_buffer_new_external(cx, realm, std::ptr::null_mut(), 0, api::ExternalOwner::None) }
-            .unwrap();
+        let empty = unsafe {
+            api::array_buffer_new_external(
+                cx,
+                realm,
+                std::ptr::null_mut(),
+                0,
+                api::ExternalOwner::None,
+            )
+        }
+        .unwrap();
         assert!(!api::array_buffer_is_detached(empty));
         assert_eq!(api::array_buffer_byte_length(empty), 0);
         // SAFETY: refused before the pointer is stored.
-        let refused =
-            unsafe { api::array_buffer_new_external(cx, realm, std::ptr::null_mut(), 4, api::ExternalOwner::None) };
+        let refused = unsafe {
+            api::array_buffer_new_external(
+                cx,
+                realm,
+                std::ptr::null_mut(),
+                4,
+                api::ExternalOwner::None,
+            )
+        };
         assert!(refused.is_err());
 
         // Memory that is not 8-aligned is refused unless the buffer is empty (wasmi's empty memory
@@ -668,20 +718,34 @@ fn null_or_misaligned_external_data_is_only_allowed_when_empty() {
         for misalignment in 1..8 {
             // SAFETY: refused before the pointer is stored.
             let refused = unsafe {
-                api::array_buffer_new_external(cx, realm, base.wrapping_add(misalignment), 8, api::ExternalOwner::None)
+                api::array_buffer_new_external(
+                    cx,
+                    realm,
+                    base.wrapping_add(misalignment),
+                    8,
+                    api::ExternalOwner::None,
+                )
             };
             assert!(refused.is_err(), "misalignment {misalignment} accepted");
         }
         // SAFETY: a zero-length buffer never reads its data pointer.
         let empty = unsafe {
-            api::array_buffer_new_external(cx, realm, base.wrapping_add(1), 0, api::ExternalOwner::None)
+            api::array_buffer_new_external(
+                cx,
+                realm,
+                base.wrapping_add(1),
+                0,
+                api::ExternalOwner::None,
+            )
         }
         .unwrap();
         assert_eq!(api::array_buffer_byte_length(empty), 0);
         // SAFETY: `words` is 32 aligned bytes, live until the end of this block, and only this
         // buffer reaches them; it is detached before `words` goes out of scope.
-        let aligned =
-            unsafe { api::array_buffer_new_external(cx, realm, base, 32, api::ExternalOwner::None) }.unwrap();
+        let aligned = unsafe {
+            api::array_buffer_new_external(cx, realm, base, 32, api::ExternalOwner::None)
+        }
+        .unwrap();
         assert_eq!(api::array_buffer_data_ptr(aligned), Some(base));
         assert!(api::array_buffer_detach(aligned));
     }
@@ -714,7 +778,10 @@ fn csp_is_asked_about_wasm_compilation() {
                 cx.undefined(),
             )
             .unwrap_err();
-            to_string(cx, embed::exception_value(error)).unwrap().format().unwrap()
+            to_string(cx, embed::exception_value(error))
+                .unwrap()
+                .format()
+                .unwrap()
         });
         assert!(message.contains("WebAssembly compilation blocked by CSP"), "{message}");
     }

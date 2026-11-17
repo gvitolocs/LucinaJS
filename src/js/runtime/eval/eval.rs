@@ -11,12 +11,12 @@ use crate::{
         source::Source,
     },
     runtime::{
-        embed,
         Context, EvalResult, Handle, HeapPtr, PropertyKey, Realm, Value,
         abstract_operations::call_object,
         bytecode::{
             function::ClosureObject, generator::BytecodeProgramGenerator, instruction::EvalFlags,
         },
+        embed,
         error::{syntax_error, syntax_parse_error, type_error},
         global_names::{
             can_declare_global_function, can_declare_global_var, create_global_function_binding,
@@ -412,14 +412,11 @@ pub fn evaluate_script(
         Err(error) => return syntax_parse_error(cx, &error),
     };
 
-    let bytecode_script = match BytecodeProgramGenerator::generate_from_parsed_script(
-        cx,
-        &program,
-        realm,
-    ) {
-        Ok(bytecode_script) => bytecode_script,
-        Err(error) => return syntax_error(cx, &error.to_string()),
-    };
+    let bytecode_script =
+        match BytecodeProgramGenerator::generate_from_parsed_script(cx, &program, realm) {
+            Ok(bytecode_script) => bytecode_script,
+            Err(error) => return syntax_error(cx, &error.to_string()),
+        };
 
     cx.vm().execute_script(bytecode_script)
 }

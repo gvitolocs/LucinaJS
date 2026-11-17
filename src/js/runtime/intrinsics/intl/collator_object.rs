@@ -15,6 +15,7 @@ use icu_collator::{
 };
 use icu_locale::Locale;
 
+use crate::extend_object;
 use crate::runtime::{
     Context, EvalResult, Handle, HeapPtr, Value,
     error::type_error,
@@ -24,7 +25,6 @@ use crate::runtime::{
     ordinary_object::ObjectBuilder,
     string_value::StringValue,
 };
-use crate::extend_object;
 
 /// [[Usage]] (https://tc39.es/ecma402/#sec-intl.collator-internals), 10.1.1 step 8.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -459,10 +459,7 @@ mod tests {
         assert_eq!(ordering(numeric, "item-9", "item-10"), Ordering::Less);
 
         // Without "kn" the digits are characters, which gives the other order.
-        assert_eq!(
-            ordering(CollatorSettings::default(), "a2", "a10"),
-            Ordering::Greater
-        );
+        assert_eq!(ordering(CollatorSettings::default(), "a2", "a10"), Ordering::Greater);
     }
 
     #[test]
@@ -505,10 +502,7 @@ mod tests {
         assert_eq!(ordering(settings, "a.b", "ac"), Ordering::Less);
 
         // The default weighs it in, and punctuation comes before letters.
-        assert_eq!(
-            ordering(CollatorSettings::default(), "a.b", "ab"),
-            Ordering::Less
-        );
+        assert_eq!(ordering(CollatorSettings::default(), "a.b", "ab"), Ordering::Less);
     }
 
     #[test]
@@ -548,9 +542,6 @@ mod tests {
         assert_eq!(ordering(danish, "aa", "ab"), Ordering::Greater);
         assert_eq!(ordering(danish, "aa", "å"), Ordering::Greater);
         assert_eq!(ordering(english, "aa", "ab"), Ordering::Less);
-        assert_eq!(
-            ordering(resolved(|s| s.locale = "it"), "aa", "ab"),
-            Ordering::Less
-        );
+        assert_eq!(ordering(resolved(|s| s.locale = "it"), "aa", "ab"), Ordering::Less);
     }
 }

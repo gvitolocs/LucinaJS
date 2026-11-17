@@ -18,7 +18,10 @@
 //! a heap item may not own anything (`gc/heap_item.rs` refuses one that needs a destructor) and a
 //! `Vec` field would be memory the collector cannot see or free.
 
+use super::segment_iterator_object::SegmentIteratorObject;
+use super::segmenter_object::{SegmenterGranularity, SegmenterObject};
 use crate::extend_object;
+use crate::runtime::intrinsics::rust_runtime::RuntimeFunction;
 use crate::runtime::{
     Context, Handle, Realm, Value,
     abstract_operations::create_data_property_or_throw,
@@ -35,10 +38,6 @@ use crate::runtime::{
     type_utilities::to_integer_or_infinity,
 };
 use crate::{intrinsic_methods, runtime_fn};
-
-use super::segment_iterator_object::SegmentIteratorObject;
-use super::segmenter_object::{SegmenterGranularity, SegmenterObject};
-use crate::runtime::intrinsics::rust_runtime::RuntimeFunction;
 
 extend_object! {
     /// Properties of %Segments% Objects
@@ -255,11 +254,7 @@ impl SegmentsPrototype {
 
         // 19.5.2.2: @@iterator, whose absence would make a Segments object non-iterable, and whose
         // presence is what `[...segmenter.segment(text)]` runs through.
-        builder.method(
-            cx.symbols.iterator(),
-            RuntimeFunction::SegmentsPrototype_iterator,
-            0,
-        )?;
+        builder.method(cx.symbols.iterator(), RuntimeFunction::SegmentsPrototype_iterator, 0)?;
 
         builder.build()
     }

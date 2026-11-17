@@ -8,8 +8,8 @@ use crate::{
         eval_result::EvalResult,
         intrinsic_builder::IntrinsicBuilder,
         intrinsics::{
-            bigint_object::BigIntObject, intrinsics::Intrinsic,
-            intl::number_format_object::NumberFormatObject,
+            bigint_object::BigIntObject, intl::number_format_object::NumberFormatObject,
+            intrinsics::Intrinsic,
         },
         object_value::ObjectValue,
         realm::Realm,

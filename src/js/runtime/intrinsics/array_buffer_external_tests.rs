@@ -90,7 +90,8 @@ fn finalize_owner_cell(_: Context, _: HeapPtr<ObjectValue>) {
     CELLS_FINALIZED.with(|count| count.set(count.get() + 1));
 }
 
-static OWNER_CELL_HOOKS: EngineCellHooks = EngineCellHooks { trace: None, finalize: finalize_owner_cell };
+static OWNER_CELL_HOOKS: EngineCellHooks =
+    EngineCellHooks { trace: None, finalize: finalize_owner_cell };
 
 type TestNative = fn(Context, &mut NativeCall) -> Result<(), Value>;
 
@@ -105,7 +106,12 @@ impl Host for MemoryHost {
         });
     }
 
-    fn call_native(&self, cx: Context, native: *const c_void, call: &mut NativeCall) -> EvalResult<()> {
+    fn call_native(
+        &self,
+        cx: Context,
+        native: *const c_void,
+        call: &mut NativeCall,
+    ) -> EvalResult<()> {
         // SAFETY: every native these tests create is a `TestNative`.
         let native = unsafe { std::mem::transmute::<*const c_void, TestNative>(native) };
         native(cx, call).map_err(|value| embed::throw_value(value.to_handle(cx)))
@@ -152,7 +158,8 @@ fn key(mut cx: Context, name: &str) -> Handle<PropertyKey> {
 fn define_global(cx: Context, name: &str, value: Handle<Value>) {
     let global = cx.initial_realm().global_object().as_object();
     let key = key(cx, name);
-    let desc = PropertyDescriptor::data(value, PropertyFlags::from_data_attributes(true, true, true));
+    let desc =
+        PropertyDescriptor::data(value, PropertyFlags::from_data_attributes(true, true, true));
     define_property_or_throw(cx, global, key, desc).unwrap();
 }
 
@@ -180,12 +187,17 @@ fn eval(cx: Context, source: &str) -> String {
 
 fn current_buffer() -> HeapPtr<ArrayBufferObject> {
     let bits = CURRENT.with(|current| current.get());
-    Value::from_raw_bits(bits).as_object().cast::<ArrayBufferObject>()
+    Value::from_raw_bits(bits)
+        .as_object()
+        .cast::<ArrayBufferObject>()
 }
 
 /// Make an external buffer over the current block and record it as the current buffer. The owner
 /// cell of a `Cell` memory is `owner`, or a new one.
-fn attach_current_block(cx: Context, owner: Option<Handle<ObjectValue>>) -> Handle<ArrayBufferObject> {
+fn attach_current_block(
+    cx: Context,
+    owner: Option<Handle<ObjectValue>>,
+) -> Handle<ArrayBufferObject> {
     let (ptr, len) = BLOCKS.with(|blocks| {
         let mut blocks = blocks.borrow_mut();
         let block = blocks.last_mut().unwrap();
@@ -233,7 +245,11 @@ fn native_gc(cx: Context, _: &mut NativeCall) -> Result<(), Value> {
 /// Move the memory to a larger block, retire (poison) the old one, detach the old buffer and
 /// attach a new one: what a wasm grow followed by `sync_buffers` does.
 fn native_grow(cx: Context, call: &mut NativeCall) -> Result<(), Value> {
-    let pages = if call.arg(0).is_undefined() { 1 } else { call.arg(0).as_number() as usize };
+    let pages = if call.arg(0).is_undefined() {
+        1
+    } else {
+        call.arg(0).as_number() as usize
+    };
     BLOCKS.with(|blocks| {
         let mut blocks = blocks.borrow_mut();
         let old = blocks.last_mut().unwrap();
@@ -260,7 +276,9 @@ fn native_grow(cx: Context, call: &mut NativeCall) -> Result<(), Value> {
 fn retired_blocks_untouched() -> bool {
     BLOCKS.with(|blocks| {
         let blocks = blocks.borrow();
-        blocks[..blocks.len() - 1].iter().all(|block| block.iter().all(|&b| b == POISON))
+        blocks[..blocks.len() - 1]
+            .iter()
+            .all(|block| block.iter().all(|&b| b == POISON))
     })
 }
 
@@ -300,7 +318,10 @@ fn external_bytes_are_the_owners_bytes() {
                       var heap = new Uint8Array([9, 8, 7]); u8.set(heap, 40); u8.copyWithin(44, 40, 43);\
                       out.push(Array.from(u8.subarray(40, 47)).join('|'));\
                       out.join()";
-        assert_eq!(eval(cx, source), "64,false,64,false,5,6,185207048,16,319951120,4,2|3|4|5,1|2|3,9|8|7|43|9|8|7");
+        assert_eq!(
+            eval(cx, source),
+            "64,false,64,false,5,6,185207048,16,319951120,4,2|3|4|5,1|2|3,9|8|7|43|9|8|7"
+        );
 
         let block = current_block();
         assert_eq!(block[0], 200);
@@ -311,12 +332,13 @@ fn external_bytes_are_the_owners_bytes() {
 
         // The embedder pointers of a view and a DataView over the external bytes
         let realm = cx.initial_realm();
-        let view = api::create_typed_array(cx, realm, api::TypedArrayKind::UInt8, buffer, 3, Some(4)).unwrap();
+        let view =
+            api::create_typed_array(cx, realm, api::TypedArrayKind::UInt8, buffer, 3, Some(4))
+                .unwrap();
         assert_eq!(api::typed_array_data_ptr(view), Some(ptr.wrapping_add(3)));
         let data_view = api::create_data_view(cx, realm, buffer, 5, None).unwrap();
         let data_view = api::as_data_view(data_view).unwrap();
         assert_eq!(api::data_view_data_ptr(data_view), Some(ptr.wrapping_add(5)));
-
     }
     finish(cx);
 }
@@ -336,7 +358,10 @@ fn element_fast_path_reads_and_writes_external_bytes() {
 
         // The same loop on a model
         let initial: Vec<u8> = (0..256).map(|i| i as u8).collect();
-        let mut a: Vec<i32> = initial[..128].chunks(4).map(|c| i32::from_le_bytes(c.try_into().unwrap())).collect();
+        let mut a: Vec<i32> = initial[..128]
+            .chunks(4)
+            .map(|c| i32::from_le_bytes(c.try_into().unwrap()))
+            .collect();
         let mut f = [0f64; 16];
         let mut s: i32 = 0;
         for i in 0..20000i32 {
@@ -368,7 +393,10 @@ fn detached_external_buffer_takes_the_detached_paths() {
     {
         handle_scope_guard!(cx);
         let buffer = install_memory(cx, Owner::Embedder, 32);
-        eval(cx, "var b = mem(); var u8 = new Uint8Array(b); var i32 = new Int32Array(b, 4, 2); var dv = new DataView(b); 1");
+        eval(
+            cx,
+            "var b = mem(); var u8 = new Uint8Array(b); var i32 = new Int32Array(b, 4, 2); var dv = new DataView(b); 1",
+        );
 
         assert!(api::array_buffer_detach(buffer));
         assert!(api::array_buffer_is_detached(buffer));
@@ -383,8 +411,14 @@ fn detached_external_buffer_takes_the_detached_paths() {
                                throws(() => b.slice(0)), throws(() => u8.fill(1)), throws(() => b.transfer()),\
                                Object.keys(u8).length);\
                       out.join()";
-        assert_eq!(eval(cx, source), "true,0,0,0,0,,,,TypeError,TypeError,TypeError,TypeError,TypeError,0");
-        assert!(current_block().iter().all(|&b| b == POISON), "a detached buffer wrote its old memory");
+        assert_eq!(
+            eval(cx, source),
+            "true,0,0,0,0,,,,TypeError,TypeError,TypeError,TypeError,TypeError,0"
+        );
+        assert!(
+            current_block().iter().all(|&b| b == POISON),
+            "a detached buffer wrote its old memory"
+        );
 
         let view = eval_object(cx, "u8");
         assert_eq!(api::typed_array_data_ptr(view), None);
@@ -396,7 +430,9 @@ fn detached_external_buffer_takes_the_detached_paths() {
 
 fn eval_object(cx: Context, source: &str) -> Handle<ObjectValue> {
     let realm = cx.initial_realm();
-    let value = embed::evaluate_script(cx, realm, source, "external_buffer_test.js", 1).ok().unwrap();
+    let value = embed::evaluate_script(cx, realm, source, "external_buffer_test.js", 1)
+        .ok()
+        .unwrap();
     value.as_object()
 }
 
@@ -409,7 +445,10 @@ fn wasm_memory_key_refuses_detach_and_transfer() {
         handle_scope_guard!(cx);
         let buffer = install_memory(cx, Owner::Cell, 16);
         assert_eq!(api::array_buffer_detach_key(buffer), DetachKey::WasmMemory);
-        assert!(!api::array_buffer_detach(buffer), "the embedder detached a wasm memory's buffer");
+        assert!(
+            !api::array_buffer_detach(buffer),
+            "the embedder detached a wasm memory's buffer"
+        );
         assert!(!api::array_buffer_is_detached(buffer));
 
         let source = "function throws(f) { try { f(); return 'no'; } catch (e) { return e.constructor.name; } }\
@@ -417,7 +456,10 @@ fn wasm_memory_key_refuses_detach_and_transfer() {
                       [throws(() => b.transfer()), throws(() => b.transfer(32)), throws(() => b.transferToFixedLength()),\
                        throws(() => b.resize(8)), b.detached, b.byteLength, new Uint8Array(b)[15], b.resizable,\
                        b.maxByteLength].join()";
-        assert_eq!(eval(cx, source), "TypeError,TypeError,TypeError,TypeError,false,16,15,false,16");
+        assert_eq!(
+            eval(cx, source),
+            "TypeError,TypeError,TypeError,TypeError,false,16,15,false,16"
+        );
 
         // Its owner detaches it (as sync_buffers does)
         let mut buffer = buffer;
@@ -484,7 +526,9 @@ const GENERATIONS: &str = "var gens = []; var same_after_gc = true;\
 /// heap verifier (which aborts on a root that still points into from-space) and GC stress.
 #[test]
 fn grow_detaches_every_view_of_the_previous_buffer() {
-    let options = OptionsBuilder::new().gc_stress_window(Some(32 << 10)).gc_verify(true);
+    let options = OptionsBuilder::new()
+        .gc_stress_window(Some(32 << 10))
+        .gc_verify(true);
     let cx = new_context_with_options(options);
     {
         handle_scope_guard!(cx);
@@ -503,7 +547,9 @@ fn grow_detaches_every_view_of_the_previous_buffer() {
 /// result says the old views are not detached, and the retired blocks were written through them.
 #[test]
 fn grow_tests_fail_when_grow_leaves_the_old_buffer_attached() {
-    let options = OptionsBuilder::new().gc_stress_window(Some(32 << 10)).gc_verify(true);
+    let options = OptionsBuilder::new()
+        .gc_stress_window(Some(32 << 10))
+        .gc_verify(true);
     let cx = new_context_with_options(options);
     {
         handle_scope_guard!(cx);
@@ -522,7 +568,9 @@ fn grow_tests_fail_when_grow_leaves_the_old_buffer_attached() {
 /// a bad pointer) and GC stress.
 #[test]
 fn gc_between_creating_and_using_the_buffer_under_verify() {
-    let options = OptionsBuilder::new().gc_stress_window(Some(32 << 10)).gc_verify(true);
+    let options = OptionsBuilder::new()
+        .gc_stress_window(Some(32 << 10))
+        .gc_verify(true);
     let cx = new_context_with_options(options);
     {
         handle_scope_guard!(cx);
@@ -570,7 +618,8 @@ fn only_the_buffer_keeps_its_owner_cell() {
 
 // --- Callouts (§3.3 rows with a callout; §3.5 item 10) ---
 
-const THROWS: &str = "function throws(f) { try { f(); return 'no'; } catch (e) { return e.constructor.name; } }";
+const THROWS: &str =
+    "function throws(f) { try { f(); return 'no'; } catch (e) { return e.constructor.name; } }";
 
 /// `ArrayBuffer.prototype.slice` whose species constructor grows the memory: the re-check after
 /// user code sees the detached buffer and throws.
@@ -712,7 +761,9 @@ fn callout_base64_options_grow_memory() {
 /// right. Under GC stress and the verifier.
 #[test]
 fn set_from_an_external_typed_array_converts_across_gcs() {
-    let options = OptionsBuilder::new().gc_stress_window(Some(16 << 10)).gc_verify(true);
+    let options = OptionsBuilder::new()
+        .gc_stress_window(Some(16 << 10))
+        .gc_verify(true);
     let cx = new_context_with_options(options);
     {
         handle_scope_guard!(cx);
@@ -760,7 +811,13 @@ fn test262_detach_honours_the_detach_key() {
         assert_eq!(eval(cx, &source), "TypeError,false,15,no,true");
 
         attach_keyless_buffer_over_current_block(cx);
-        assert_eq!(eval(cx, "var k = mem(); $262.detachArrayBuffer(k); [k.detached, k.byteLength].join()"), "true,0");
+        assert_eq!(
+            eval(
+                cx,
+                "var k = mem(); $262.detachArrayBuffer(k); [k.detached, k.byteLength].join()"
+            ),
+            "true,0"
+        );
     }
     finish(cx);
 }

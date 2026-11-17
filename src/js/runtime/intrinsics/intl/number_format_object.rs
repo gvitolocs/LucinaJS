@@ -15,21 +15,6 @@ use std::rc::Rc;
 
 use icu_provider::DataError;
 
-use crate::extend_object;
-use crate::runtime::{
-    Context, Handle, PropertyKey, Value,
-    abstract_operations::ordinary_has_instance,
-    error::{range_error, type_error},
-    eval_result::EvalResult,
-    gc::{HeapItem, HeapPtr, HeapVisitor},
-    get,
-    intrinsics::intrinsics::Intrinsic,
-    object_value::ObjectValue,
-    ordinary_object::ObjectBuilder,
-    to_string,
-    type_utilities::{ToPrimitivePreferredType, number_to_string, to_number, to_primitive},
-};
-
 use super::cache::DataLocale;
 use super::intl_object::canonicalize_locale_list_argument;
 use super::locale_negotiation::{
@@ -44,8 +29,22 @@ use super::number_format_core::{
 use super::number_format_currency::{CurrencyRenderer, CurrencySettings, currency_digits};
 use super::options::{
     OptionType, coerce_options_to_object, default_number_option,
-    get_boolean_or_string_number_format_option, get_enum_option, get_name_option, get_number_option,
-    get_option,
+    get_boolean_or_string_number_format_option, get_enum_option, get_name_option,
+    get_number_option, get_option,
+};
+use crate::extend_object;
+use crate::runtime::{
+    Context, Handle, PropertyKey, Value,
+    abstract_operations::ordinary_has_instance,
+    error::{range_error, type_error},
+    eval_result::EvalResult,
+    gc::{HeapItem, HeapPtr, HeapVisitor},
+    get,
+    intrinsics::intrinsics::Intrinsic,
+    object_value::ObjectValue,
+    ordinary_object::ObjectBuilder,
+    to_string,
+    type_utilities::{ToPrimitivePreferredType, number_to_string, to_number, to_primitive},
 };
 
 extend_object! {
@@ -411,7 +410,9 @@ impl NumberFormatObject {
             Style::Currency => {
                 // Step 13.1: [[Currency]], which 16.1.3 step 12.1 wrote and its step 4.1 made sure
                 // this style has.
-                let code = slots.currency.expect("the currency style resolves a currency");
+                let code = slots
+                    .currency
+                    .expect("the currency style resolves a currency");
 
                 // Step 13.2: CurrencyDigits, from the locale-free table of `CurrencyFractionsV1`.
                 let digits = locale_data(cx, currency_digits(code))?;
@@ -779,8 +780,8 @@ pub(crate) fn set_number_format_digit_options(
     let (need_significant_digits, need_fraction_digits) =
         if rounding_priority == RoundingPriority::Auto {
             let need_significant_digits = has_significant_digits;
-            let need_fraction_digits = !need_significant_digits
-                && (has_fraction_digits || notation != Notation::Compact);
+            let need_fraction_digits =
+                !need_significant_digits && (has_fraction_digits || notation != Notation::Compact);
 
             (need_significant_digits, need_fraction_digits)
         } else {

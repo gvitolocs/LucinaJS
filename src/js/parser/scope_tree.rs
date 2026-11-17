@@ -3,7 +3,11 @@ use std::{cell::Cell, rc::Rc, sync::LazyLock};
 use allocator_api2::alloc::Global;
 
 use crate::{
-    common::{alloc, options::Options, wtf_8::{Wtf8Str, Wtf8String}},
+    common::{
+        alloc,
+        options::Options,
+        wtf_8::{Wtf8Str, Wtf8String},
+    },
     parser::{
         ParseError,
         ast::{
@@ -164,7 +168,8 @@ impl<'a> ScopeTree<'a> {
             .bindings
             .truncate(saved_state.current_node_num_bindings);
         self.ast_nodes.truncate(saved_state.num_nodes);
-        self.annex_b_pending.truncate(saved_state.num_annex_b_pending);
+        self.annex_b_pending
+            .truncate(saved_state.num_annex_b_pending);
     }
 
     /// Enter a new AST scope node with the provided kind.
@@ -198,11 +203,15 @@ impl<'a> ScopeTree<'a> {
     }
 
     fn get_ast_node(&self, node_id: ScopeNodeId) -> &AstScopeNode<'a> {
-        self.ast_nodes[node_id].as_deref().expect("scope node removed by compaction")
+        self.ast_nodes[node_id]
+            .as_deref()
+            .expect("scope node removed by compaction")
     }
 
     fn get_ast_node_mut(&mut self, node_id: ScopeNodeId) -> &mut AstScopeNode<'a> {
-        self.ast_nodes[node_id].as_deref_mut().expect("scope node removed by compaction")
+        self.ast_nodes[node_id]
+            .as_deref_mut()
+            .expect("scope node removed by compaction")
     }
 
     pub fn get_ast_node_ptr(&self, node_id: ScopeNodeId) -> AstPtr<AstScopeNode<'a>> {
@@ -222,7 +231,9 @@ impl<'a> ScopeTree<'a> {
 
     /// Whether the scope node with the given id still exists (see `compact_into`).
     pub fn has_ast_node(&self, node_id: ScopeNodeId) -> bool {
-        self.ast_nodes.get(node_id).is_some_and(|node| node.is_some())
+        self.ast_nodes
+            .get(node_id)
+            .is_some_and(|node| node.is_some())
     }
 
     /// A copy of the tree in `alloc` with only the nodes marked in `live` (its length is the number
@@ -338,7 +349,8 @@ impl<'a> ScopeTree<'a> {
             catch_parameter_is_binding_identifier: false,
         };
 
-        self.ast_nodes.push(Some(AstBox::new_in(scope_node, self.alloc)));
+        self.ast_nodes
+            .push(Some(AstBox::new_in(scope_node, self.alloc)));
     }
 
     /// Add a binding to the AST scope tree, hoisting to a higher scope if necessary. On success
@@ -829,8 +841,12 @@ impl<'a> ScopeTree<'a> {
         let name = self.own_name(name);
         let decl_scope = self.current_node_id;
         let hoist_target = self.hoist_target_of(decl_scope);
-        self.annex_b_pending
-            .push(AnnexBPendingFunction { name, decl_scope, hoist_target, eligible });
+        self.annex_b_pending.push(AnnexBPendingFunction {
+            name,
+            decl_scope,
+            hoist_target,
+            eligible,
+        });
     }
 
     /// The var hoist target of the given scope: the nearest function, function body, script, eval,
@@ -912,7 +928,12 @@ impl<'a> ScopeTree<'a> {
                     if node.bindings.contains_key(name) {
                         false
                     } else {
-                        node.add_binding(name, BindingKind::Var, None, /* needs_tdz_check */ false);
+                        node.add_binding(
+                            name,
+                            BindingKind::Var,
+                            None,
+                            /* needs_tdz_check */ false,
+                        );
                         true
                     }
                 }
@@ -921,12 +942,13 @@ impl<'a> ScopeTree<'a> {
                     // declaredFuncOrVariableNames does not contain funcName (it then does for the
                     // following declarations of the name).
                     let node = self.get_ast_node(hoist_target);
-                    let is_declared = node.bindings.get(name).is_some_and(|binding| {
-                        matches!(
-                            binding.kind,
-                            BindingKind::Var | BindingKind::Function { is_lexical: false, .. }
-                        )
-                    }) || node.annex_b_functions.iter().any(|func| func.name == name);
+                    let is_declared =
+                        node.bindings.get(name).is_some_and(|binding| {
+                            matches!(
+                                binding.kind,
+                                BindingKind::Var | BindingKind::Function { is_lexical: false, .. }
+                            )
+                        }) || node.annex_b_functions.iter().any(|func| func.name == name);
 
                     !is_declared
                 }
@@ -935,12 +957,9 @@ impl<'a> ScopeTree<'a> {
             };
 
             let decl_scope = decl.decl_scope;
-            self.get_ast_node_mut(hoist_target).annex_b_functions.push(AnnexBFunction {
-                name,
-                decl_scope,
-                creates_var,
-                enabled: Cell::new(true),
-            });
+            self.get_ast_node_mut(hoist_target)
+                .annex_b_functions
+                .push(AnnexBFunction { name, decl_scope, creates_var, enabled: Cell::new(true) });
         }
     }
 
@@ -1198,7 +1217,10 @@ impl ScopeTree<'_> {
     /// when one function was parsed again on its own (earlier nodes are finished already).
     pub fn finish_vm_scope_tree_from(&mut self, first_node: ScopeNodeId) {
         for i in first_node..self.ast_nodes.len() {
-            if self.ast_nodes[i].as_ref().is_none_or(|node| node.owned_scopes.is_empty()) {
+            if self.ast_nodes[i]
+                .as_ref()
+                .is_none_or(|node| node.owned_scopes.is_empty())
+            {
                 continue;
             }
 
@@ -1446,7 +1468,10 @@ impl<'a> AstScopeNode<'a> {
             owned_scopes,
             num_local_registers: self.num_local_registers,
             vm_scope: self.vm_scope,
-            reparse: self.reparse.as_deref().map(|info| AstBox::new_in(*info, alloc)),
+            reparse: self
+                .reparse
+                .as_deref()
+                .map(|info| AstBox::new_in(*info, alloc)),
             annex_b_functions,
             catch_parameter_is_binding_identifier: self.catch_parameter_is_binding_identifier,
         }
@@ -1464,9 +1489,9 @@ impl<'a> AstScopeNode<'a> {
         name: &Wtf8Str,
         decl_scope: ScopeNodeId,
     ) -> Option<&AnnexBFunction<'a>> {
-        self.annex_b_functions.iter().find(|func| {
-            func.decl_scope == decl_scope && func.name == name && func.enabled.get()
-        })
+        self.annex_b_functions
+            .iter()
+            .find(|func| func.decl_scope == decl_scope && func.name == name && func.enabled.get())
     }
 
     pub fn set_catch_parameter_is_binding_identifier(&mut self, value: bool) {
@@ -1481,7 +1506,12 @@ impl<'a> AstScopeNode<'a> {
         }
 
         match self.bindings.get(name).map(|binding| &binding.kind) {
-            Some(BindingKind::Function { is_lexical: true, is_expression: false, func_node, .. }) => {
+            Some(BindingKind::Function {
+                is_lexical: true,
+                is_expression: false,
+                func_node,
+                ..
+            }) => {
                 let func = func_node.as_ref();
                 !func.is_async() && !func.is_generator()
             }

@@ -13,7 +13,8 @@ use crate::{
     runtime::{
         Context, EvalResult, Handle, Value,
         embed::{
-            host, host_object::alloc_host_object,
+            host,
+            host_object::alloc_host_object,
             host_space::{HostAllocation, HostFlags},
             state,
         },

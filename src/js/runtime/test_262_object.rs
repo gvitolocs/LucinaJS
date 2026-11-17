@@ -13,7 +13,8 @@ use crate::{
         get,
         intrinsic_builder::IntrinsicBuilder,
         intrinsics::{
-            array_buffer_object::{ArrayBufferObject, DetachKey}, intrinsics::Intrinsic,
+            array_buffer_object::{ArrayBufferObject, DetachKey},
+            intrinsics::Intrinsic,
             rust_runtime::RuntimeFunction,
         },
         object_value::ObjectValue,
@@ -213,7 +214,8 @@ mod tests {
         common::options::OptionsBuilder,
         handle_scope_guard,
         runtime::{
-            Context, ContextBuilder, Handle, Realm, Value, embed, eval::expression::eval_typeof,
+            Context, ContextBuilder, Handle, Realm, Value, embed,
+            eval::expression::eval_typeof,
             type_utilities::{is_loosely_equal, is_strictly_equal, to_boolean, to_string},
         },
     };
@@ -390,7 +392,11 @@ mod tests {
         run(cx, realm, "pairs[0].y = 2; delete pairs[0].y;");
         assert!(run(cx, realm, "pairs[0]").is_htmldda());
 
-        run(cx, realm, "Object.defineProperty(pairs[0], 'z', { value: 1, enumerable: true });");
+        run(
+            cx,
+            realm,
+            "Object.defineProperty(pairs[0], 'z', { value: 1, enumerable: true });",
+        );
         assert!(run(cx, realm, "pairs[0]").is_htmldda());
 
         // More properties than the shape will hold transitions for, so it becomes a map mode shape.
