@@ -20,7 +20,7 @@ use crate::{
     ignored::IgnoredIndex,
     index::TestIndex,
     manifest::{Suite, SuiteFilter, TestManifest},
-    runner::{TestResultCompletion, TestResults, TestRunner},
+    runner::{RunnerConfig, TestResultCompletion, TestResults, TestRunner},
     timeout::{TimeoutHost, Watchdog},
 };
 
@@ -74,11 +74,13 @@ fn a_run_without_a_timeout_reports_normally() {
         manifest,
         index,
         ignored,
-        suite_filter,
-        1,
-        Some("runs_fine.js".to_owned()),
-        None,
-        Duration::ZERO,
+        RunnerConfig {
+            suite_filter,
+            num_threads: 1,
+            filter: Some("runs_fine.js".to_owned()),
+            feature: None,
+            test_timeout: Duration::ZERO,
+        },
     );
     let results = runner.run(false);
 
@@ -332,11 +334,13 @@ fn test262_await_import_evaluation_completes() {
         manifest,
         index,
         ignored,
-        SuiteFilter::new(Some(vec![Suite::Test262])),
-        1,
-        Some(PATH.to_owned()),
-        None,
-        Duration::from_secs(120),
+        RunnerConfig {
+            suite_filter: SuiteFilter::new(Some(vec![Suite::Test262])),
+            num_threads: 1,
+            filter: Some(PATH.to_owned()),
+            feature: None,
+            test_timeout: Duration::from_secs(120),
+        },
     );
     let results = runner.run(false);
 
@@ -366,8 +370,18 @@ fn fixture_runner_inputs() -> (TestManifest, TestIndex, HashMap<Suite, IgnoredIn
 fn run_fixtures(timeout: Duration) -> TestResults {
     let (manifest, index, ignored, suite_filter) = fixture_runner_inputs();
 
-    let mut runner =
-        TestRunner::new(manifest, index, ignored, suite_filter, 1, None, None, timeout);
+    let mut runner = TestRunner::new(
+        manifest,
+        index,
+        ignored,
+        RunnerConfig {
+            suite_filter,
+            num_threads: 1,
+            filter: None,
+            feature: None,
+            test_timeout: timeout,
+        },
+    );
 
     runner.run(false)
 }

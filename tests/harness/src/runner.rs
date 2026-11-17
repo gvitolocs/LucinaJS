@@ -99,6 +99,17 @@ use crate::{
     utils::GenericResult,
 };
 
+/// How a [`TestRunner`] selects and bounds the tests it runs.
+pub struct RunnerConfig {
+    pub suite_filter: SuiteFilter,
+    pub num_threads: u8,
+    pub filter: Option<String>,
+    pub feature: Option<String>,
+    /// Wall time each test is allowed before the watchdog interrupts it. Zero disables the
+    /// watchdog entirely.
+    pub test_timeout: Duration,
+}
+
 pub struct TestRunner {
     manifest: TestManifest,
     index: TestIndex,
@@ -128,12 +139,9 @@ impl TestRunner {
         manifest: TestManifest,
         index: TestIndex,
         ignored: HashMap<Suite, IgnoredIndex>,
-        suite_filter: SuiteFilter,
-        num_threads: u8,
-        filter: Option<String>,
-        feature: Option<String>,
-        test_timeout: Duration,
+        config: RunnerConfig,
     ) -> TestRunner {
+        let RunnerConfig { suite_filter, num_threads, filter, feature, test_timeout } = config;
         let thread_pool = threadpool::Builder::new()
             .num_threads(num_threads.into())
             .thread_stack_size(RUNNER_THREAD_STACK_SIZE)

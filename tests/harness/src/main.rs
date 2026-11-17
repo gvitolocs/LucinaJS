@@ -4,7 +4,7 @@ use brimstone_integration_test_harness::{
     ignored::IgnoredIndex,
     index::TestIndex,
     manifest::{Suite, SuiteFilter, TestManifest},
-    runner::TestRunner,
+    runner::{RunnerConfig, TestRunner},
     timeout::DEFAULT_TEST_TIMEOUT_SECS,
     utils::GenericResult,
 };
@@ -169,11 +169,13 @@ fn main_impl() -> GenericResult {
         manifest,
         index,
         ignored,
-        suite_filter,
-        args.threads,
-        args.filter,
-        args.feature,
-        Duration::from_secs(args.test_timeout_secs),
+        RunnerConfig {
+            suite_filter,
+            num_threads: args.threads,
+            filter: args.filter,
+            feature: args.feature,
+            test_timeout: Duration::from_secs(args.test_timeout_secs),
+        },
     );
     let results = runner.run(args.verbose);
 
