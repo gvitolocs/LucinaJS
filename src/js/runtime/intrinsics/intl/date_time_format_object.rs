@@ -929,7 +929,7 @@ impl DateTimeFormatObject {
             time_zone_name: components.time_zone_name,
         };
 
-        (*instance).resolved = Some(ResolvedDateTimeFormat {
+        instance.resolved = Some(ResolvedDateTimeFormat {
             locale: *locale,
             data_locale,
             calendar: *calendar,

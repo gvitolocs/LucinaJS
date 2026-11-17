@@ -66,7 +66,7 @@ impl Starts {
     }
 
     fn is_start(&self, p: usize) -> bool {
-        if !self.range.contains(&p) || (p - self.range.start) % self.unit != 0 {
+        if !self.range.contains(&p) || !(p - self.range.start).is_multiple_of(self.unit) {
             return false;
         }
         let i = (p - self.range.start) / self.unit;
@@ -283,7 +283,7 @@ fn traverse(
 }
 
 /// Verify the heap; `when` is "before" or "after" (the collection). Aborts on any bad pointer.
-pub(crate) fn verify_heap(mut cx: Context, when: &str) {
+pub(crate) fn verify_heap(cx: Context, when: &str) {
     let unit = Heap::alloc_size_for_request_size(1);
     let permanent = cx.heap.permanent_heap_bounds();
     let permanent = permanent.start as usize..permanent.end as usize;

@@ -73,7 +73,7 @@ pub struct HostHeader {
 }
 
 const HEADER_SIZE: usize = size_of::<HostHeader>();
-crate::static_assert!(HEADER_SIZE % ITEM_ALIGNMENT == 0);
+crate::static_assert!(HEADER_SIZE.is_multiple_of(ITEM_ALIGNMENT));
 
 impl HostHeader {
     /// # Safety

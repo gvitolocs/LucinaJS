@@ -68,7 +68,7 @@ impl ParseContext {
     pub fn scope_alloc(&self) -> &Bump {
         // SAFETY: the arena is only replaced by `replace_scope_arena`, whose caller guarantees
         // that nothing in the old arena is used after it is freed.
-        unsafe { &**self.scope_alloc.get() }
+        unsafe { &*self.scope_alloc.get() }
     }
 
     /// Replace the scope tree arena, returning the old one, to free once the tree is moved out of

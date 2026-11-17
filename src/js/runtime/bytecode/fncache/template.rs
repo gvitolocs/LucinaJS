@@ -199,8 +199,8 @@ pub struct Template {
 pub fn node_text<'a>(walk: &Walk<'a>, ordinal: u32) -> Option<&'a Wtf8Str> {
     let info = walk.nodes.get(ordinal as usize)?;
     match info.kind {
-        NodeKind::Identifier => Some(&walk.node::<ast::Identifier>(ordinal)?.name),
-        NodeKind::StringLiteral => Some(&walk.node::<ast::StringLiteral>(ordinal)?.value),
+        NodeKind::Identifier => Some(walk.node::<ast::Identifier>(ordinal)?.name),
+        NodeKind::StringLiteral => Some(walk.node::<ast::StringLiteral>(ordinal)?.value),
         _ => None,
     }
 }
@@ -217,7 +217,7 @@ pub fn resolve_text(
         TextSource::Quasi(template_ordinal, quasi_index) => {
             let lit = walk.node::<ast::TemplateLiteral>(template_ordinal)?;
             let quasi = lit.quasis.get(quasi_index as usize)?;
-            quasi.cooked.as_deref().map(|t| t.to_owned_in(Global))
+            quasi.cooked.map(|t| t.to_owned_in(Global))
         }
         TextSource::Private(ordinal, strip) => {
             let id = walk.node::<ast::Identifier>(ordinal)?;

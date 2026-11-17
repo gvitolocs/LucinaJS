@@ -1388,7 +1388,7 @@ impl<'a> BytecodeProgramGenerator<'a> {
             let write_operand = |buffer: &mut Vec<u8>, value: usize| match width {
                 WidthEnum::Narrow => buffer.push(value as u8),
                 WidthEnum::Wide => buffer.extend_from_slice(&(value as u16).to_ne_bytes()),
-                WidthEnum::ExtraWide => buffer.extend_from_slice(&(value as usize).to_ne_bytes()),
+                WidthEnum::ExtraWide => buffer.extend_from_slice(&value.to_ne_bytes()),
             };
             for h in &template.handlers {
                 write_operand(&mut buffer, h.start as usize);
@@ -1833,7 +1833,7 @@ impl<'a> BytecodeProgramGenerator<'a> {
                         PendingFunctionNode::Arrow { node, .. } => (2, func_addr(node), false),
                         PendingFunctionNode::Method { node, .. } => (3, func_addr(node), false),
                         PendingFunctionNode::Constructor { node, is_base, .. } => {
-                            (4, node.as_ref().map_or(0, |n| func_addr(n)), *is_base)
+                            (4, node.as_ref().map_or(0, &func_addr), *is_base)
                         }
                         PendingFunctionNode::ClassFieldsInitializer { .. } => (5, 0, false),
                         PendingFunctionNode::ClassStaticInitializer { .. } => (6, 0, false),
@@ -3336,10 +3336,10 @@ impl<'a> BytecodeFunctionGenerator<'a> {
             | PendingFunctionNode::ClassStaticInitializer { .. } => {
                 self.has_unsupported_nested = true;
             }
-            PendingFunctionNode::Constructor { node, fields_info, .. } => {
-                if node.is_none() || fields_info.is_some() {
-                    self.has_unsupported_nested = true;
-                }
+            PendingFunctionNode::Constructor { node, fields_info, .. }
+                if (node.is_none() || fields_info.is_some()) =>
+            {
+                self.has_unsupported_nested = true;
             }
             _ => {}
         }
@@ -12677,7 +12677,7 @@ enum LazyNode {
     /// The function is parsed again on its first call.
     Detached(DetachedFunction),
     /// Generation failed before the AST could be dropped: the error to report on the first call.
-    Failed(Box<String>),
+    Failed(String),
 }
 
 /// What parsing a lazy function again on its own needs.
@@ -12734,7 +12734,7 @@ impl LazyFunctionInfo {
 
     /// Mark the stub as failed, with the error to report on its first call.
     pub(crate) fn set_failed(&mut self, message: String) {
-        self.node = LazyNode::Failed(Box::new(message));
+        self.node = LazyNode::Failed(message);
     }
 
     /// The error to report on the first call of a stub whose generation failed before its AST

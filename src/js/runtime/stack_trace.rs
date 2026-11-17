@@ -231,7 +231,7 @@ pub fn describe_stack_frames(
         let function_name = match func.name() {
             // Top-level code is reported without a name, like SpiderMonkey (`<global>`, `<eval>`)
             Some(name) => Some(name.format()?)
-                .filter(|name| !name.is_empty() && !(name.starts_with('<') && name.ends_with('>'))),
+                .filter(|name| !(name.is_empty() || name.starts_with('<') && name.ends_with('>'))),
             None => None,
         };
 

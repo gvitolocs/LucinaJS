@@ -205,7 +205,7 @@ impl Property {
     }
 
     /// Convert to a complete property descriptor.
-    pub fn to_property_descriptor(&self) -> PropertyDescriptor {
+    pub fn to_property_descriptor(self) -> PropertyDescriptor {
         if self.is_accessor() {
             let accessor = self.accessor_value();
             PropertyDescriptor {

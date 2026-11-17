@@ -1037,10 +1037,11 @@ impl GarbageCollector {
 
             // The prototype of a dead shape is not read: its entry is removed.
             let prototype = match shape {
-                Some(_) => match &mut entry.key_mut().prototype {
-                    Some(prototype) => Some(self.resolve_weak_addr(prototype.as_any())),
-                    None => None,
-                },
+                Some(_) => entry
+                    .key_mut()
+                    .prototype
+                    .as_mut()
+                    .map(|prototype| self.resolve_weak_addr(prototype.as_any())),
                 None => None,
             };
 

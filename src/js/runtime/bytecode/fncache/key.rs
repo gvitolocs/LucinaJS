@@ -1695,7 +1695,7 @@ impl<'a> AstVisitor<'a> for KeyWalker<'a> {
         self.tag(TAG_LABELED);
         self.ordinal(stmt as *mut _ as *const u8, stmt.loc, NodeKind::Other);
         self.hash_symbol(stmt.label.name);
-        self.u16(stmt.label.id as u16);
+        self.u16(stmt.label.id);
         default_visit_labeled_statement(self, stmt);
     }
 

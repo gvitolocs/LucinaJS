@@ -251,7 +251,7 @@ impl DiskStore {
     #[allow(dead_code)]
     pub fn contains(&mut self, key: u128) -> bool {
         self.load_index();
-        self.index.as_ref().map_or(false, |i| i.contains_key(&key))
+        self.index.as_ref().is_some_and(|i| i.contains_key(&key))
     }
 
     /// Queue a record to be written behind the writer thread.

@@ -7,14 +7,14 @@
 //! here rather than pretended to be read:
 //!
 //! - The NaN and infinity strings of 16.5.3 steps 2-4, which are ILD values. The number-symbols
-//! marker `icu_decimal` 2.1 reads carries separators, sign affixes and grouping sizes only, so the
-//! one string below serves NaN and the one after it serves infinity for every locale built here.
-//! They are the spellings V8 and SpiderMonkey use for English, and SpiderMonkey uses them for every
-//! locale.
+//!   marker `icu_decimal` 2.1 reads carries separators, sign affixes and grouping sizes only, so the
+//!   one string below serves NaN and the one after it serves infinity for every locale built here.
+//!   They are the spellings V8 and SpiderMonkey use for English, and SpiderMonkey uses them for every
+//!   locale.
 //! - The percent pattern of 16.2.3's `[[percent]]` leaves, for which `icu_decimal` has no marker
-//! either. Across the locales built here the pattern is `#,##0%` except in Danish, whose CLDR
-//! pattern is `#,##0 %` with U+00A0 NO-BREAK SPACE, so the only per-locale piece of it is the one
-//! string [`DecimalRenderer::percent_spacing`] holds.
+//!   either. Across the locales built here the pattern is `#,##0%` except in Danish, whose CLDR
+//!   pattern is `#,##0 %` with U+00A0 NO-BREAK SPACE, so the only per-locale piece of it is the one
+//!   string [`DecimalRenderer::percent_spacing`] holds.
 //!
 //! Everything else — the separators, the grouping positions and sizes, the plus and minus affixes
 //! and their position around the number — comes from the baked CLDR data through `icu_decimal`.
@@ -126,10 +126,7 @@ impl CurrencyCode {
     /// letters, so the UTF-8 check that `from_utf8` performs cannot fail here; the empty string it
     /// falls back to is unreachable and only keeps an `unwrap` out of the engine.
     pub fn as_str(&self) -> &str {
-        match std::str::from_utf8(&self.0[..]) {
-            Ok(text) => text,
-            Err(_) => "",
-        }
+        std::str::from_utf8(&self.0[..]).unwrap_or_default()
     }
 }
 
@@ -826,7 +823,7 @@ fn math_value_from_literal_text(text: &str) -> IntlMathValue {
             cap_to_stored_digits(&mut decimal);
             match decimal.parse::<f64>() {
                 Ok(x) if x.is_infinite() => return IntlMathValue::infinity(negative),
-                Ok(x) if x == 0.0 => return IntlMathValue::signed_zero(negative),
+                Ok(0.0) => return IntlMathValue::signed_zero(negative),
                 Ok(_) => {}
                 // Not a decimal, which the scanner above makes impossible.
                 Err(_) => return IntlMathValue::NaN,

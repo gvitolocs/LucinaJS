@@ -1948,7 +1948,7 @@ pub fn heap_census(cx: Context) -> Vec<CensusEntry> {
         .into_iter()
         .map(|(kind, count, bytes)| CensusEntry { kind, count, bytes })
         .collect();
-    entries.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.bytes));
     entries
 }
 
