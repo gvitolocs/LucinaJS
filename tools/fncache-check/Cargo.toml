@@ -1,0 +1,17 @@
+[package]
+name = "fncache-check"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+brimstone_core = { path = "../../src/js", default-features = false, features = ["annex_b", "no_jemalloc"] }
+
+[profile.release]
+debug = false
+
+# Detach from the parent brimstone workspace. This is an isolated tool.
+[workspace]
+
+[patch.crates-io]
+indexmap-allocator-api = { git = "https://github.com/Hans-Halverson/indexmap-allocator-api.git", rev = "36852f985c01fb9f58f2d9e510655ca1dbb1f4d0" }

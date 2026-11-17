@@ -1,0 +1,7 @@
+# Normative: this file is the lower bound LB of the authorship rule in this repository and the list of units that may have a pre-rule record (LucinaOS docs/ci/PROOF-ROLES.md). Set by the coordinator, never by a branch. Full 40-hex ids only.
+# Added 2026-11-13. LB is the commit that put lucina-ci inventory, spec and roles on this repository's main (merge of ci-inventory).
+cutoff 4fe738b56dcaa0e694e9c73ece81f2ffc955398f
+# No unit is listed below. The five older units (verification/call-position, fncache, gc-accounting, gc-sizing, reparse) were written before roles existed here: they are PRE-RULE.
+# Who wrote them, as far as the Co-Authored-By trailers of the last commits touching each show: call-position Claude Sonnet 5.5; fncache, gc-accounting, gc-sizing, reparse Claude Opus 5.5.
+# They carry seed records (not-reviewed-under-rule) in docs/ci/proof-roles.tsv, which never satisfy a change: any later edit of their statements or proofs needs a normal record, and no independent verdict is claimed for them.
+# The first unit this rule actually walks is the GC weak-edge unit.

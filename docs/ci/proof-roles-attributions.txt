@@ -1,0 +1,5 @@
+# Normative: the coordinator's corrections of wrongly stamped commits (LucinaOS docs/ci/PROOF-ROLES.md, "Wrongly stamped commits"). Set by the coordinator, never by a branch.
+# commit	model	reason
+# A full 40-digit lowercase hex id, the model as the roles table spells it, a non-empty reason. One line per commit (a commit is corrected ONCE); append-only: existing lines stay byte-identical and in order, new lines go at the end.
+f9eb06acf3ba06ad6f234f7b0fff4c2de8bd26c0	Qoder	weak_rules.rs extraction; evidence: lane run brim-extract (lane qoder, outcome ok, workspace <worktree>); coordinator allow 2026-11-15
+e51edc59c424c70bc44ab43360a9e3659807a51f	Qoder	weak_rules.rs extraction; evidence: lane run brim-extract (lane qoder, outcome ok, workspace <worktree>); coordinator allow 2026-11-15
