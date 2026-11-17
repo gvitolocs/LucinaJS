@@ -3956,3 +3956,51 @@ fn private_elements_need_an_extensible_object() {
         "1"
     );
 }
+
+/// The dynamic reference instructions read their operands before the scope lookup, which can run
+/// script that collects. With the from-space poisoned, an operand read after the lookup came from the old
+/// bytecode and corrupted the frame, so this crashes without the `gc_stress_test` feature when it regresses.
+#[test]
+fn dynamic_reference_instructions_survive_a_collection_in_the_lookup() {
+    let options = OptionsBuilder::new()
+        .gc_stress_window(Some(16 << 10))
+        .gc_verify(true);
+    let (cx, _recorder) = new_context_with_options(options);
+    handle_scope_guard!(cx);
+    let realm = cx.initial_realm();
+    let before = embed::heap_stats(cx).gc_count;
+    let source = "function churn() { var k = []; for (var i = 0; i < 500; i++) k.push({ a: i, s: \"s\" + i }); return k.length; }\
+                  var o = { x: 4, y: null, get [Symbol.unscopables]() { churn(); return {}; } };\
+                  var r = [];\
+                  with (o) { x += 1; r.push(x++); r.push(++x); y ??= 3; x **= 2; }\
+                  var p = new Proxy({ z: 1 }, { has(t, k) { churn(); return k in t; } });\
+                  with (p) { z += 2; z++; }\
+                  r.join() + \" \" + o.x + \" \" + o.y + \" \" + p.z";
+    assert_eq!(eval_string(cx, realm, source), "5,7 49 3 4");
+    assert!(embed::heap_stats(cx).gc_count - before >= 5);
+}
+
+/// MakeDynamicRef: only a simple assignment to a name resolved at run time emits it, and it read its
+/// dest operand after the lookup that can collect.
+#[test]
+fn simple_assignment_through_with_survives_a_collection_in_the_lookup() {
+    let options = OptionsBuilder::new()
+        .gc_stress_window(Some(16 << 10))
+        .gc_verify(true);
+    let (cx, _recorder) = new_context_with_options(options);
+    handle_scope_guard!(cx);
+    let realm = cx.initial_realm();
+    let before = embed::heap_stats(cx).gc_count;
+    let source = "function churn() { var k = []; for (var i = 0; i < 500; i++) k.push({ a: i, s: \"s\" + i }); return k.length; }\
+                  var o = { x: 1, get [Symbol.unscopables]() { churn(); return {}; } };\
+                  with (o) { x = 5; }\
+                  var t = { x: 1 };\
+                  var p = new Proxy(t, { has(t, k) { churn(); return k in t; } });\
+                  with (p) { x = 7; }\
+                  var gz = 1;\
+                  with (o) { gz = 9; undeclaredNowhereBound = 3; }\
+                  function g() { var q = { x: 1, get [Symbol.unscopables]() { churn(); return {}; } }; with (q) { x = (churn(), 2); } return q.x; }\
+                  [o.x, t.x, gz, undeclaredNowhereBound, g(), g()].join()";
+    assert_eq!(eval_string(cx, realm, source), "5,7,9,3,2,2");
+    assert!(embed::heap_stats(cx).gc_count - before >= 5);
+}

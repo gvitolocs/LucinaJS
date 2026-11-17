@@ -2,7 +2,7 @@
 
 ## What it is and what it is used for
 
-LucinaJS is a JavaScript engine written in Rust: a parser, a bytecode compiler and VM, a copying (semispace) garbage collector, and the built-ins, including `Intl`. It is the engine of LucinaNet, a browser, where it is used in place of SpiderMonkey through an embedding API (`src/js/runtime/embed`, described in `docs/embedding.md`).
+LucinaJS is a JavaScript engine written in Rust: a parser, a bytecode compiler and VM, a copying (semispace) garbage collector, and the built-ins, including `Intl`. It is the engine of LucinaNet, a browser, where it is used in place of SpiderMonkey through an embedding API (`src/js/runtime/embed`, described in `docs/embedding.md`). The engine is experimental and must not be run on untrusted input yet.
 
 Names have not been changed from the upstream project:
 

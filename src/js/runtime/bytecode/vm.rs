@@ -4480,6 +4480,10 @@ impl VM {
     ) -> EvalResult<()> {
         let cx = self.cx();
         handle_scope!(cx, {
+            // Operands are read before the lookup: it can run script (an @@unscopables getter, a
+            // Proxy trap) that collects, and `instr` points into the bytecode which then moves.
+            let dest = instr.dest();
+
             let name = self.get_constant(instr.name_index());
             let name = name.as_string().to_handle();
 
@@ -4490,7 +4494,7 @@ impl VM {
                 Some(reference) => Value::heap_item(reference.as_any()),
                 None => Value::undefined(),
             };
-            self.write_register(instr.dest(), reference_value);
+            self.write_register(dest, reference_value);
 
             Ok(())
         })
@@ -4507,6 +4511,12 @@ impl VM {
     ) -> EvalResult<()> {
         let cx = self.cx();
         handle_scope!(cx, {
+            // Operands are read before the lookup and the load: both can run script (an
+            // @@unscopables getter, a Proxy trap, an accessor) that collects, and `instr` points
+            // into the bytecode which then moves.
+            let dest = instr.dest();
+            let reference_register = instr.reference();
+
             let name = self.get_constant(instr.name_index());
             let name = name.as_string().to_handle();
 
@@ -4521,10 +4531,10 @@ impl VM {
             // The value may be produced by a getter that collects, so the reference is only read
             // back from its handle after the load.
             let value = reference.load_from_reference(cx, name, is_strict)?;
-            self.write_register(instr.dest(), value);
+            self.write_register(dest, value);
 
             let reference_value = Value::heap_item(reference.as_any());
-            self.write_register(instr.reference(), reference_value);
+            self.write_register(reference_register, reference_value);
 
             Ok(())
         })
