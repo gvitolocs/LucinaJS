@@ -316,6 +316,32 @@ fn run_full_test(
 /// The global a first-party test reads to learn that it runs in a gc-stress build.
 const GC_STRESS_MARKER: &str = "__lucinaGcStress";
 
+/// Whether the realm of a test of `suite` is given the gc-stress marker global: in a gc-stress
+/// build (`feature_on`), without the full-scale override (`full_scale_env`), and for the
+/// first-party integration suite alone. A test262 realm is never given a global the harness put
+/// there, so no conformance result can move because of it.
+pub fn defines_gc_stress_global(suite: Suite, feature_on: bool, full_scale_env: bool) -> bool {
+    feature_on && !full_scale_env && matches!(suite, Suite::Integration)
+}
+
+/// Define the marker global on the initial realm of `cx` when the decision above calls for one.
+/// The build and the environment are inputs rather than read here, so that the gc-stress rows of
+/// the decision are reachable from a unit test of an ordinary build of the harness.
+pub fn install_gc_stress_marker(cx: Context, suite: Suite, feature_on: bool, full_scale_env: bool) {
+    if !defines_gc_stress_global(suite, feature_on, full_scale_env) {
+        return;
+    }
+
+    let mut cx = cx;
+    handle_scope!(cx, {
+        let name = cx.alloc_static_string(GC_STRESS_MARKER).unwrap();
+        let key = PropertyKey::string_handle(cx, name).unwrap();
+        let desc = PropertyDescriptor::non_enumerable_data(cx.bool(true));
+        let global_object = cx.initial_realm().global_object().as_object();
+        define_property_or_throw(cx, global_object, key, desc).unwrap();
+    });
+}
+
 fn run_single_test(
     test: &Test,
     suite_root: &str,
@@ -377,17 +403,14 @@ fn run_single_test(
     // A gc-stress build collects the whole heap before every allocation, so a test whose loops repeat a
     // construction hundreds of times cannot run at the count it was written with inside the per-test
     // budget. The global names that build to the tests that ask for it; `BS_GC_STRESS_FULL_SCALE` leaves
-    // it undefined, which is how the full-scale run gets the plain counts back.
-    if cfg!(feature = "gc_stress_test") && std::env::var_os("BS_GC_STRESS_FULL_SCALE").is_none() {
-        let mut cx = cx;
-        handle_scope!(cx, {
-            let name = cx.alloc_static_string(GC_STRESS_MARKER).unwrap();
-            let key = PropertyKey::string_handle(cx, name).unwrap();
-            let desc = PropertyDescriptor::non_enumerable_data(cx.bool(true));
-            let global_object = cx.initial_realm().global_object().as_object();
-            define_property_or_throw(cx, global_object, key, desc).unwrap();
-        });
-    }
+    // it undefined, which is how the full-scale run gets the plain counts back. Only the first-party
+    // suite is asked: a test262 realm of a gc-stress build runs with exactly the globals it expects.
+    install_gc_stress_marker(
+        cx,
+        test.suite,
+        cfg!(feature = "gc_stress_test"),
+        std::env::var_os("BS_GC_STRESS_FULL_SCALE").is_some(),
+    );
 
     // Wrap in catch_unwind so that we can clean up the context in the event of a panic
     let panic_result = panic::catch_unwind(AssertUnwindSafe(|| {
