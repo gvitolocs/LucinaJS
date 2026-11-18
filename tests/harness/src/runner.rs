@@ -19,10 +19,11 @@ use brimstone_core::{
         options::{Options, OptionsBuilder},
         wtf_8::Wtf8String,
     },
-    eval_err,
+    eval_err, handle_scope,
     parser::{self, ParseContext, ParsedProgram, source::Source},
     runtime::{
-        Context, ContextBuilder, EvalResult, Handle, Value,
+        Context, ContextBuilder, EvalResult, Handle, PropertyDescriptor, PropertyKey, Value,
+        abstract_operations::define_property_or_throw,
         bytecode::generator::BytecodeProgramGenerator, embed, eval_result::EvalError, get,
         intrinsics::error_object::ErrorObject, test_262_object::Test262Object, to_console_string,
         to_string,
@@ -312,6 +313,9 @@ fn run_full_test(
     }
 }
 
+/// The global a first-party test reads to learn that it runs in a gc-stress build.
+const GC_STRESS_MARKER: &str = "__lucinaGcStress";
+
 fn run_single_test(
     test: &Test,
     suite_root: &str,
@@ -369,6 +373,21 @@ fn run_single_test(
     }
 
     cx.initial_realm().install_optional_globals(cx).unwrap();
+
+    // A gc-stress build collects the whole heap before every allocation, so a test whose loops repeat a
+    // construction hundreds of times cannot run at the count it was written with inside the per-test
+    // budget. The global names that build to the tests that ask for it; `BS_GC_STRESS_FULL_SCALE` leaves
+    // it undefined, which is how the full-scale run gets the plain counts back.
+    if cfg!(feature = "gc_stress_test") && std::env::var_os("BS_GC_STRESS_FULL_SCALE").is_none() {
+        let mut cx = cx;
+        handle_scope!(cx, {
+            let name = cx.alloc_static_string(GC_STRESS_MARKER).unwrap();
+            let key = PropertyKey::string_handle(cx, name).unwrap();
+            let desc = PropertyDescriptor::non_enumerable_data(cx.bool(true));
+            let global_object = cx.initial_realm().global_object().as_object();
+            define_property_or_throw(cx, global_object, key, desc).unwrap();
+        });
+    }
 
     // Wrap in catch_unwind so that we can clean up the context in the event of a panic
     let panic_result = panic::catch_unwind(AssertUnwindSafe(|| {

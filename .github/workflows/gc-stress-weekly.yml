@@ -1,0 +1,70 @@
+# Weekly full-scale run of the one first-party test whose loops are too dense for a gc-stress build to
+# finish at the count they are written with: under `--features gc_stress_test` the engine collects the
+# whole heap before every allocation, so that test runs at a reduced count in the gate (see its header) and
+# at its plain counts here. Report-only: nothing here is required by any gate, no job of rust-ci.yml depends
+# on it, and a failure changes no check status - it opens an issue saying the run failed, at most one.
+name: gc-stress-weekly
+on:
+  schedule:
+    # 03:00 UTC every Sunday.
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gc-stress-weekly-${{ github.sha }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: never
+  CARGO_NET_RETRY: 10
+
+jobs:
+  full-scale:
+    name: gc-stress full-scale (built-ins/Intl/constructor_gc_roots)
+    runs-on: ubuntu-24.04
+    # The two passes of the file take about an hour on a hosted runner, so the job leaves room for the
+    # build of the engine beside them; a run that outlives even this is reported like any other failure.
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      issues: write
+    env:
+      # The override that leaves the marker global undefined, so the test keeps its plain counts.
+      BS_GC_STRESS_FULL_SCALE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-registry-
+      - name: Toolchain (the channel of rust-toolchain.toml)
+        run: |
+          channel=$(sed -n 's/^channel *= *"\(.*\)".*/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --no-self-update
+      - name: test262 at the pinned commit
+        run: tools/ci/fetch-test262.sh
+      - name: The test at full scale in the gc-stress build
+        run: |
+          cargo brimstone-test --release --features gc_stress_test -- \
+            --reindex --ignore-unimplemented --test-timeout-secs 7200 \
+            -s integration built-ins/Intl/constructor_gc_roots
+      - name: Open one issue for a failed or timed-out run
+        if: failure() || cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'weekly gc-stress full-scale run failed: constructor_gc_roots'
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # One open issue says it once; a later failure adds nothing until it is closed.
+          if [ "$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq 'length')" -gt 0 ]; then
+            echo "an open issue already reports this failure"
+            exit 0
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "The weekly full-scale gc-stress run of tests/integration/built-ins/Intl/constructor_gc_roots.js failed or timed out: $RUN_URL"

@@ -6,6 +6,21 @@ description: The Intl service constructors keep their instance rooted while 9.2.
   about to be reused. What the caller then does with that pointer is what this test looks for.
 ---*/
 
+// A gc-stress build runs a full collection of the heap before every allocation, and this file is one of
+// the densest of its kind in the suite: at the counts written below its two passes need thousands of
+// seconds, far past the per-test budget, so the stress build reads them a twentieth as often. Nothing
+// else changes - every construction, both matchers and every assertion run at either count - and the
+// full-scale file is still run in that mode, weekly and report-only. The plain build sees no marker and
+// keeps the counts as they are.
+const gcStress = typeof __lucinaGcStress !== "undefined";
+
+// The count of one of the loops below: as written, or a twentieth of it under the marker and never less
+// than one, so every loop runs at least once. The narrow-format assertions index the arrays they read
+// by this same function of the same count, so they move with the loop that filled them.
+function repeats(count) {
+    return gcStress ? Math.max(1, Math.round(count / 20)) : count;
+}
+
 // Every one of these loops makes hundreds of instances and keeps what they answer, so that the kept
 // values survive a collection and are read back afterwards. The assertions are ordinary ones: the
 // bug this covers is not a wrong answer but a block read after it moved, which shows up as a value
@@ -16,7 +31,7 @@ for (const Service of services) {
     // The instance itself, kept: 9.2.8 read its options, and the object that comes back has to be
     // the block the collection left it in.
     const instances = [];
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < repeats(200); i++) {
         instances.push(new Service(["en"], { localeMatcher: "lookup" }));
     }
 
@@ -28,7 +43,7 @@ for (const Service of services) {
     // The resolved options object, kept: `resolvedOptions` is written after the last allocation of
     // the constructor, so an instance that lost its slots on the way out reports uninitialized here.
     const options = [];
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < repeats(200); i++) {
         options.push(new Service(["en"], { localeMatcher: "lookup" }).resolvedOptions());
     }
 
@@ -39,7 +54,7 @@ for (const Service of services) {
     // A value formatted by an instance, kept, which is the case the whole suite reaches most: the
     // string outlives the instance that made it.
     const formatted = [];
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < repeats(200); i++) {
         formatted.push(new Service(["en"], { localeMatcher: "lookup" }).resolvedOptions().locale);
     }
 
@@ -56,7 +71,7 @@ const retainedNumberFormatAccessors = [];
 const retainedCollatorAccessors = [];
 const retainedDateTimeFormatAccessors = [];
 
-for (let i = 0; i < 200; i++) {
+for (let i = 0; i < repeats(200); i++) {
     const numberFormat = new Intl.NumberFormat(["en"]);
     assert.sameValue(numberFormat.format, numberFormat.format);
     retainedNumberFormatAccessors.push(numberFormat.format);
@@ -165,7 +180,7 @@ const retainedParts = [];
 const retainedRanges = [];
 const retainedRangeParts = [];
 
-for (let i = 0; i < 100; i++) {
+for (let i = 0; i < repeats(100); i++) {
     const formatter = new Intl.DateTimeFormat(["en"], optionsBag);
 
     assert.sameValue(formatter.resolvedOptions().locale, "en");
@@ -217,7 +232,7 @@ for (const parts of retainedRangeParts) {
 // instance read back from a private symbol rather than from `this`. Keeping it is the case where a
 // capture that went stale is visible.
 const boundFormats = [];
-for (let i = 0; i < 100; i++) {
+for (let i = 0; i < repeats(100); i++) {
     boundFormats.push(new Intl.DateTimeFormat(["en"], optionsBag).format);
 }
 
@@ -234,7 +249,7 @@ const localStrings = [];
 const localDateStrings = [];
 const localTimeStrings = [];
 
-for (let i = 0; i < 100; i++) {
+for (let i = 0; i < repeats(100); i++) {
     localStrings.push(rangeStart.toLocaleString("en", optionsBag));
     localDateStrings.push(rangeStart.toLocaleDateString("en", optionsBag));
     localTimeStrings.push(rangeStart.toLocaleTimeString("en", {
@@ -283,7 +298,7 @@ const retainedNarrowRanges = [];
 const retainedNarrowOptions = [];
 
 for (const [index, options] of narrowBags.entries()) {
-    for (let i = 0; i < 100; i += 1) {
+    for (let i = 0; i < repeats(100); i += 1) {
         churn();
         const formatter = new Intl.DateTimeFormat(["en"], options);
 
@@ -301,7 +316,7 @@ for (const [index, options] of narrowBags.entries()) {
 // The far side: nothing above was kept by the engine, only by these arrays, and every answer has to
 // still be the one the narrow renderer gave.
 for (const [index, text] of retainedNarrowFormats.entries()) {
-    assert.sameValue(text, narrowAnswers[Math.floor(index / 100)], "a retained narrow string is still the name it was: " + text);
+    assert.sameValue(text, narrowAnswers[Math.floor(index / repeats(100))], "a retained narrow string is still the name it was: " + text);
 }
 
 for (const parts of retainedNarrowParts) {
@@ -319,7 +334,7 @@ for (const [index, text] of retainedNarrowRanges.entries()) {
 
     // The era bag renders nothing of the two ends that differs, so 11.5.8 steps 13 to 16 answer it
     // with one date; the other two render the month and the day, which the two ends do not share.
-    const bag = Math.floor(index / 100);
+    const bag = Math.floor(index / repeats(100));
     assert.sameValue(bag === 2 ? text === narrowAnswers[2] : text.includes("\u2013"), true, "the range of a retained narrow format: " + text);
 }
 
@@ -330,7 +345,7 @@ for (const resolved of retainedNarrowOptions) {
 }
 
 for (const [index, formatter] of retainedNarrowInstances.entries()) {
-    assert.sameValue(formatter.format(narrowDay), narrowAnswers[Math.floor(index / 100)], "read back through the instance itself");
+    assert.sameValue(formatter.format(narrowDay), narrowAnswers[Math.floor(index / repeats(100))], "read back through the instance itself");
 }
 
 for (const formatter of retainedNarrowInstances.slice(0, 3)) {
@@ -339,7 +354,7 @@ for (const formatter of retainedNarrowInstances.slice(0, 3)) {
 
 // A narrow day period is refused at the constructor, and the refusal has to still be a refusal after
 // the churn rather than an answer out of a renderer that was never built.
-for (let i = 0; i < 50; i += 1) {
+for (let i = 0; i < repeats(50); i += 1) {
     churn();
     assert.throws(RangeError, () => new Intl.DateTimeFormat(["en"], { hour: "numeric", dayPeriod: "narrow", timeZone: "UTC" }));
 }
@@ -355,7 +370,7 @@ const retainedPast = [];
 const retainedFuture = [];
 const retainedRelativeParts = [];
 
-for (let i = 0; i < 100; i++) {
+for (let i = 0; i < repeats(100); i++) {
     const formatter = new Intl.RelativeTimeFormat(["da"], { localeMatcher: "lookup" });
 
     assert.sameValue(formatter.resolvedOptions().locale, "da");
@@ -405,7 +420,7 @@ for (const type of ["language", "region", "script", "currency"]) {
     // as a currency, and a throw here would be the test's mistake rather than the engine's.
     const code = { language: "en", region: "US", script: "Latn", currency: "USD" }[type];
 
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < repeats(100); i++) {
         const displayNames = new Intl.DisplayNames(["da"], { type, localeMatcher: "lookup" });
 
         assert.sameValue(displayNames.resolvedOptions().locale, "da");
@@ -439,7 +454,7 @@ for (const resolved of retainedNameOptions) {
 // which table is asked, which is a second key into the same cache.
 const retainedByStyle = [];
 for (const style of ["long", "short", "narrow"]) {
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < repeats(100); i++) {
         retainedByStyle.push(new Intl.DisplayNames(["it"], { type: "language", style }).of("en"));
     }
 }
@@ -491,7 +506,7 @@ for (const locale of dnResolved) {
 // this is what makes the plain run reach the same points.
 function churn() {
     const junk = [];
-    for (let i = 0; i < 64; i += 1) {
+    for (let i = 0; i < repeats(64); i += 1) {
         junk.push(("locale" + i).repeat(8));
     }
     return junk;
@@ -560,7 +575,7 @@ const retainedTextInfo = [];
 const retainedWeekInfo = [];
 const retainedLocaleLists = [];
 
-for (let i = 0; i < 100; i++) {
+for (let i = 0; i < repeats(100); i++) {
     // The options bag itself, and a Proxy over it, which is the same reading of 15.1.1 steps 14 to 34
     // through 9.2.1's ordinary Get.
     const options = mkLocaleOptions();
@@ -598,7 +613,7 @@ for (const locale of [retainedLocales[0], retainedPlainLocales[0], retainedPlain
 // A subclass: 15.1.1 step 6 creates through `newTarget`, so the instance is the subclass's, while 6
 // and 15.3.10 step 4 construct a plain `%Intl.Locale%` from a tag this engine wrote.
 class SubLocale extends Intl.Locale {}
-for (let i = 0; i < 10; i++) {
+for (let i = 0; i < repeats(10); i++) {
     const sub = new SubLocale("en-GB", mkLocaleOptions().bag);
     assert.sameValue(Object.getPrototypeOf(sub), SubLocale.prototype);
     checkLocaleAccessors(sub);
@@ -612,7 +627,7 @@ for (let i = 0; i < 10; i++) {
 
 // 9.2.1 step 7.3.3 and 15.1.1 step 8: a Locale read where a tag is asked for, so that [[Locale]] is
 // copied out of one instance and into another while both are live.
-for (let i = 0; i < 20; i++) {
+for (let i = 0; i < repeats(20); i++) {
     const source = retainedLocales[0];
 
     // The tag argument path, which is the slot rather than a `toString` of it.
@@ -677,7 +692,7 @@ for (const list of retainedLocaleLists) {
 const segmentedText = "Segmenting the same sentence keeps the same table.";
 const retainedSegments = [];
 
-for (let i = 0; i < 200; i++) {
+for (let i = 0; i < repeats(200); i++) {
     const segmenter = new Intl.Segmenter(["en"], { localeMatcher: "lookup", granularity: "word" });
     assert.sameValue(segmenter.resolvedOptions().granularity, "word");
     retainedSegments.push(segmenter.segment(segmentedText));
@@ -709,7 +724,7 @@ for (const segments of retainedSegments) {
 // reads the boundaries the Segments object was made with, and nothing else.
 const retainedIterators = [];
 
-for (let i = 0; i < 200; i++) {
+for (let i = 0; i < repeats(200); i++) {
     const iterator = new Intl.Segmenter(["it"], { granularity: "grapheme" })
         .segment("world")[Symbol.iterator]();
     assert.sameValue(iterator.next().value.segment, "w");
